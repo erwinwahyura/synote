@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synote - Personal Notes</title>
+
+    <!-- Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+
+    <!-- Syntax highlighting for code blocks -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            display: flex;
+            height: 100vh;
+            background: #f5f5f5;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .sidebar-header h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .new-note-btn {
+            width: 100%;
+            padding: 10px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .new-note-btn:hover {
+            background: #0056b3;
+        }
+
+        .search-box {
+            padding: 10px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 8px 32px 8px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: #007bff;
+        }
+
+        .search-clear {
+            position: absolute;
+            right: 28px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #999;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 4px;
+            display: none;
+        }
+
+        .search-clear:hover {
+            color: #333;
+        }
+
+        .search-clear.visible {
+            display: block;
+        }
+
+        .search-results-info {
+            padding: 8px 20px;
+            font-size: 12px;
+            color: #666;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .notes-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .note-item {
+            padding: 12px;
+            margin-bottom: 5px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .note-item:hover {
+            background: #e9ecef;
+        }
+
+        .note-item.active {
+            background: #007bff;
+            color: white;
+        }
+
+        .note-item-title {
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .note-item-date {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .note-item.active .note-item-date {
+            color: #cce5ff;
+        }
+
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+        }
+
+        .editor-header {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .editor-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .btn:hover {
+            background: #f8f9fa;
+        }
+
+        .btn-danger {
+            color: #dc3545;
+            border-color: #dc3545;
+        }
+
+        .btn-danger:hover {
+            background: #dc3545;
+            color: white;
+        }
+
+        .editor-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .editor-title {
+            width: 100%;
+            font-size: 32px;
+            font-weight: bold;
+            border: none;
+            padding: 20px 20px 10px;
+            outline: none;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .editor-split {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .editor-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .editor-pane-header {
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #666;
+        }
+
+        .editor-body {
+            flex: 1;
+            border: none;
+            padding: 20px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.8;
+            resize: none;
+            outline: none;
+            overflow-y: auto;
+        }
+
+        .preview-pane {
+            flex: 1;
+            border-left: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .preview-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            font-size: 15px;
+            line-height: 1.8;
+        }
+
+        /* Markdown preview styling */
+        .preview-content h1 {
+            font-size: 2em;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 0.3em;
+        }
+
+        .preview-content h2 {
+            font-size: 1.5em;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+            border-bottom: 1px solid #f0f0f0;
+            padding-bottom: 0.3em;
+        }
+
+        .preview-content h3 {
+            font-size: 1.25em;
+            margin-top: 0.5em;
+            margin-bottom: 0.5em;
+        }
+
+        .preview-content p {
+            margin-bottom: 1em;
+        }
+
+        .preview-content ul, .preview-content ol {
+            margin-bottom: 1em;
+            padding-left: 2em;
+        }
+
+        .preview-content li {
+            margin-bottom: 0.25em;
+        }
+
+        .preview-content code {
+            background: #f6f8fa;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 85%;
+        }
+
+        .preview-content pre {
+            background: #f6f8fa;
+            padding: 16px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin-bottom: 1em;
+        }
+
+        .preview-content pre code {
+            background: none;
+            padding: 0;
+            font-size: 13px;
+        }
+
+        .preview-content blockquote {
+            border-left: 4px solid #ddd;
+            padding-left: 1em;
+            color: #666;
+            margin: 1em 0;
+        }
+
+        .preview-content a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+        .preview-content a:hover {
+            text-decoration: underline;
+        }
+
+        .preview-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-bottom: 1em;
+        }
+
+        .preview-content th, .preview-content td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .preview-content th {
+            background: #f6f8fa;
+            font-weight: 600;
+        }
+
+        .preview-content img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #999;
+        }
+
+        .empty-state h2 {
+            margin-bottom: 10px;
+        }
+
+        /* Animations */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1>Synote</h1>
+            <button class="new-note-btn" onclick="createNewNote()">+ New Note</button>
+        </div>
+        <div class="search-box">
+            <input type="text" class="search-input" id="searchInput"
+                   placeholder="Search notes... (Ctrl+K)" oninput="handleSearch()">
+            <button class="search-clear" id="searchClear" onclick="clearSearch()">&times;</button>
+        </div>
+        <div class="search-results-info" id="searchInfo" style="display: none;"></div>
+        <div class="notes-list" id="notesList"></div>
+    </div>
+
+    <div class="editor-container" id="editorContainer">
+        <div class="empty-state">
+            <h2>Welcome to Synote</h2>
+            <p>Create a new note to get started</p>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8080/api';
+        let currentNote = null;
+        let notes = [];
+        let autoSaveTimeout = null;
+        let searchTimeout = null;
+        let isSearching = false;
+
+        async function loadNotes() {
+            try {
+                const response = await fetch(`${API_URL}/notes`);
+                notes = await response.json();
+                renderNotesList();
+            } catch (error) {
+                console.error('Failed to load notes:', error);
+            }
+        }
+
+        function renderNotesList() {
+            const notesList = document.getElementById('notesList');
+            const searchInfo = document.getElementById('searchInfo');
+
+            if (notes.length === 0 && isSearching) {
+                notesList.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No notes found</div>';
+                return;
+            }
+
+            notesList.innerHTML = notes.map(note => `
+                <div class="note-item ${currentNote?.id === note.id ? 'active' : ''}"
+                     onclick="loadNote('${note.id}')">
+                    <div class="note-item-title">${note.title || 'Untitled'}</div>
+                    <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
+                </div>
+            `).join('');
+
+            // Update search info
+            if (isSearching) {
+                searchInfo.style.display = 'block';
+                searchInfo.textContent = `Found ${notes.length} note${notes.length !== 1 ? 's' : ''}`;
+            } else {
+                searchInfo.style.display = 'none';
+            }
+        }
+
+        async function handleSearch() {
+            const searchInput = document.getElementById('searchInput');
+            const searchClear = document.getElementById('searchClear');
+            const query = searchInput.value.trim();
+
+            // Show/hide clear button
+            if (searchInput.value) {
+                searchClear.classList.add('visible');
+            } else {
+                searchClear.classList.remove('visible');
+            }
+
+            // Clear previous timeout
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+
+            // Debounce search
+            searchTimeout = setTimeout(async () => {
+                if (query === '') {
+                    isSearching = false;
+                    await loadNotes();
+                } else {
+                    isSearching = true;
+                    await performSearch(query);
+                }
+            }, 300);
+        }
+
+        function clearSearch() {
+            const searchInput = document.getElementById('searchInput');
+            const searchClear = document.getElementById('searchClear');
+            searchInput.value = '';
+            searchClear.classList.remove('visible');
+            isSearching = false;
+            loadNotes();
+        }
+
+        async function performSearch(query) {
+            try {
+                const response = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`);
+                notes = await response.json();
+                renderNotesList();
+            } catch (error) {
+                console.error('Search failed:', error);
+                showNotification('Search failed', 'error');
+            }
+        }
+
+        async function loadNote(id) {
+            try {
+                const response = await fetch(`${API_URL}/notes/${id}`);
+                currentNote = await response.json();
+                renderEditor();
+                renderNotesList();
+            } catch (error) {
+                console.error('Failed to load note:', error);
+            }
+        }
+
+        function renderEditor() {
+            const container = document.getElementById('editorContainer');
+            container.innerHTML = `
+                <div class="editor-header">
+                    <div class="editor-actions">
+                        <button class="btn" onclick="saveNote()">Save</button>
+                        <button class="btn btn-danger" onclick="deleteNote()">Delete</button>
+                    </div>
+                </div>
+                <div class="editor-content">
+                    <input type="text" class="editor-title" id="noteTitle"
+                           value="${escapeHtml(currentNote.title)}"
+                           placeholder="Note title"
+                           oninput="updatePreview()">
+                    <div class="editor-split">
+                        <div class="editor-pane">
+                            <div class="editor-pane-header">Markdown</div>
+                            <textarea class="editor-body" id="noteContent"
+                                      placeholder="Write your note in markdown..."
+                                      oninput="updatePreview()">${escapeHtml(currentNote.content)}</textarea>
+                        </div>
+                        <div class="preview-pane">
+                            <div class="editor-pane-header">Preview</div>
+                            <div class="preview-content" id="previewContent"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            updatePreview();
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function updatePreview() {
+            const content = document.getElementById('noteContent')?.value || '';
+            const previewElement = document.getElementById('previewContent');
+
+            if (!previewElement) return;
+
+            // Configure marked for GitHub Flavored Markdown
+            marked.setOptions({
+                breaks: true,
+                gfm: true,
+                highlight: function(code, lang) {
+                    if (lang && hljs.getLanguage(lang)) {
+                        try {
+                            return hljs.highlight(code, { language: lang }).value;
+                        } catch (e) {
+                            console.error('Highlight error:', e);
+                        }
+                    }
+                    return hljs.highlightAuto(code).value;
+                }
+            });
+
+            // Render markdown
+            const html = marked.parse(content);
+            previewElement.innerHTML = html;
+
+            // Trigger auto-save
+            scheduleAutoSave();
+        }
+
+        function scheduleAutoSave() {
+            if (autoSaveTimeout) {
+                clearTimeout(autoSaveTimeout);
+            }
+            autoSaveTimeout = setTimeout(() => {
+                saveNote(true); // Auto-save silently
+            }, 2000); // Save after 2 seconds of inactivity
+        }
+
+        async function createNewNote() {
+            try {
+                const response = await fetch(`${API_URL}/notes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: 'Untitled Note',
+                        content: ''
+                    })
+                });
+                currentNote = await response.json();
+                await loadNotes();
+                renderEditor();
+            } catch (error) {
+                console.error('Failed to create note:', error);
+            }
+        }
+
+        async function saveNote(silent = false) {
+            if (!currentNote) return;
+
+            const title = document.getElementById('noteTitle')?.value || currentNote.title;
+            const content = document.getElementById('noteContent')?.value || currentNote.content;
+
+            try {
+                const response = await fetch(`${API_URL}/notes/${currentNote.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content })
+                });
+                currentNote = await response.json();
+                await loadNotes();
+
+                if (!silent) {
+                    showNotification('Note saved!', 'success');
+                }
+            } catch (error) {
+                console.error('Failed to save note:', error);
+                if (!silent) {
+                    showNotification('Failed to save note', 'error');
+                }
+            }
+        }
+
+        function showNotification(message, type = 'info') {
+            // Simple notification - can be improved later
+            const existingNotif = document.querySelector('.notification');
+            if (existingNotif) existingNotif.remove();
+
+            const notif = document.createElement('div');
+            notif.className = 'notification';
+            notif.textContent = message;
+            notif.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 12px 24px;
+                background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#007bff'};
+                color: white;
+                border-radius: 4px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                z-index: 1000;
+                animation: slideIn 0.3s ease;
+            `;
+
+            document.body.appendChild(notif);
+
+            setTimeout(() => {
+                notif.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => notif.remove(), 300);
+            }, 2000);
+        }
+
+        async function deleteNote() {
+            if (!currentNote) return;
+            if (!confirm('Are you sure you want to delete this note?')) return;
+
+            try {
+                await fetch(`${API_URL}/notes/${currentNote.id}`, {
+                    method: 'DELETE'
+                });
+                currentNote = null;
+                await loadNotes();
+                document.getElementById('editorContainer').innerHTML = `
+                    <div class="empty-state">
+                        <h2>Note deleted</h2>
+                        <p>Create a new note to get started</p>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Failed to delete note:', error);
+                alert('Failed to delete note');
+            }
+        }
+
+        // Load notes on page load
+        loadNotes();
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Cmd+S or Ctrl+S to save
+            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                e.preventDefault();
+                saveNote();
+            }
+
+            // Cmd+K or Ctrl+K to focus search
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                document.getElementById('searchInput').focus();
+            }
+
+            // Escape to clear search
+            if (e.key === 'Escape' && document.activeElement.id === 'searchInput') {
+                clearSearch();
+                document.getElementById('searchInput').blur();
+            }
+        });
+    </script>
+</body>
+</html>

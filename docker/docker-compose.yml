@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  synote:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data/notes:/app/data/notes
+      - ./config.toml:/app/config.toml
+    restart: unless-stopped
+    environment:
+      - RUST_LOG=info
