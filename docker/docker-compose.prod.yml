@@ -1,0 +1,64 @@
+# Production Docker Compose
+# For running Synote in production with HTTPS and reverse proxy
+
+version: '3.8'
+
+services:
+  synote:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: synote-backend
+    restart: unless-stopped
+    environment:
+      - RUST_LOG=info
+      - SYNOTE_AUTH_TOKEN=${SYNOTE_AUTH_TOKEN:-changeme}
+    volumes:
+      - synote-data:/app/data/notes
+      - ./config.prod.toml:/app/config.toml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/notes"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - synote-network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: synote-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - synote-network
+    depends_on:
+      synote:
+        condition: service_healthy
+
+  # Optional: Automated backups
+  backup:
+    image: offen/docker-volume-backup:latest
+    container_name: synote-backup
+    restart: unless-stopped
+    environment:
+      - BACKUP_CRON_EXPRESSION=0 2 * * *
+      - BACKUP_RETENTION_DAYS=30
+    volumes:
+      - synote-data:/backup/data:ro
+      - ./backups:/archive
+
+volumes:
+  synote-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  synote-network:
+    driver: bridge

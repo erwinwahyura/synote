@@ -1,0 +1,49 @@
+# Caddyfile for Synote production
+# Handles HTTPS automatically with Let's Encrypt
+
+{$DOMAIN:localhost} {
+    # Compress responses
+    encode gzip
+
+    # Security headers
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        X-XSS-Protection "1; mode=block"
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' https:; connect-src 'self';"
+        Referrer-Policy strict-origin-when-cross-origin
+        Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+    }
+
+    # Serve static frontend files
+    root * /var/www/html
+    file_server
+
+    # Proxy API requests to backend
+    handle /api/* {
+        reverse_proxy synote:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Handle SPA routing - serve index.html for all non-API routes
+    handle {
+        try_files {path} {path}/ /index.html
+        file_server
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+}
+
+# Health check endpoint
+:8081 {
+    respond "OK" 200
+}

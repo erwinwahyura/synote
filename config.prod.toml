@@ -1,0 +1,14 @@
+# Synote Production Configuration
+# Copy this file to config.toml and customize for your deployment
+
+[server]
+host = "0.0.0.0"  # Listen on all interfaces in production
+port = 8080
+
+[storage]
+notes_dir = "/app/data/notes"  # Use absolute path in Docker
+
+[auth]
+enabled = true
+token = "changeme"  # CHANGE THIS! Use: openssl rand -hex 32
+# Or set via environment variable: SYNOTE_AUTH_TOKEN=your-secret-token

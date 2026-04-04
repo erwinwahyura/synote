@@ -1,12 +1,16 @@
 mod api;
+mod auth;
 mod config;
 mod models;
 mod storage;
 
+use crate::api::health::{health_check, readiness_check};
 use crate::api::notes::{create_note, delete_note, get_note, list_notes, search_notes, update_note};
+use crate::auth::{auth_middleware, AuthConfig};
 use crate::config::Config;
 use crate::storage::NoteStorage;
 use axum::{
+    middleware,
     routing::{delete, get, post, put},
     Router,
 };
@@ -34,14 +38,20 @@ async fn main() -> anyhow::Result<()> {
     let storage = Arc::new(NoteStorage::new(config.storage.notes_dir)?);
     tracing::info!("Note storage initialized");
 
+    // Build auth config
+    let auth_config = AuthConfig::new(config.auth.enabled, config.auth.token.clone());
+
     // Build our application with routes
     let app = Router::new()
+        .route("/api/health", get(health_check))
+        .route("/api/ready", get(readiness_check))
         .route("/api/notes", get(list_notes))
         .route("/api/notes", post(create_note))
         .route("/api/notes/:id", get(get_note))
         .route("/api/notes/:id", put(update_note))
         .route("/api/notes/:id", delete(delete_note))
         .route("/api/search", get(search_notes))
+        .layer(middleware::from_fn_with_state(auth_config.clone(), auth_middleware))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -49,7 +59,8 @@ async fn main() -> anyhow::Result<()> {
                 .allow_headers(Any),
         )
         .layer(TraceLayer::new_for_http())
-        .with_state(storage);
+        .with_state(storage)
+        .with_state(auth_config);
 
     // Run the server
     let addr = format!("{}:{}", config.server.host, config.server.port);

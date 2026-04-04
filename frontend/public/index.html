@@ -413,12 +413,123 @@
     </div>
 
     <script>
-        const API_URL = 'http://localhost:8080/api';
+        // Configuration
+        const API_URL = window.location.hostname === 'localhost' 
+            ? 'http://localhost:8080/api' 
+            : `${window.location.origin}/api`;
         let currentNote = null;
         let notes = [];
         let autoSaveTimeout = null;
         let searchTimeout = null;
         let isSearching = false;
+        let authToken = localStorage.getItem('synote_token');
+
+        // API helper with auth
+        async function apiCall(endpoint, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
+            const response = await fetch(`${API_URL}${endpoint}`, {
+                ...options,
+                headers
+            });
+
+            if (response.status === 401) {
+                // Auth required - show login
+                showLoginModal();
+                throw new Error('Authentication required');
+            }
+
+            return response;
+        }
+
+        function showLoginModal() {
+            // Check if modal already exists
+            if (document.getElementById('loginModal')) return;
+
+            const modal = document.createElement('div');
+            modal.id = 'loginModal';
+            modal.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000;">
+                    <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 400px; max-width: 90%;">
+                        <h2 style="margin-bottom: 20px; font-size: 20px;">Authentication Required</h2>
+                        <p style="margin-bottom: 20px; color: #666; font-size: 14px;">Please enter your Synote access token to continue.</p>
+                        <input type="password" id="tokenInput" placeholder="Enter token..." style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px;">
+                        <div style="display: flex; gap: 10px;">
+                            <button onclick="submitToken()" style="flex: 1; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Login</button>
+                            <button onclick="closeLoginModal()" style="flex: 1; padding: 12px; background: #e0e0e0; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button>
+                        </div>
+                        <p id="loginError" style="margin-top: 15px; color: #dc3545; font-size: 14px; display: none;"></p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            // Focus input and handle Enter key
+            document.getElementById('tokenInput').focus();
+            document.getElementById('tokenInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') submitToken();
+            });
+        }
+
+        function closeLoginModal() {
+            const modal = document.getElementById('loginModal');
+            if (modal) modal.remove();
+        }
+
+        async function submitToken() {
+            const input = document.getElementById('tokenInput');
+            const errorDisplay = document.getElementById('loginError');
+            const token = input.value.trim();
+
+            if (!token) {
+                errorDisplay.textContent = 'Please enter a token';
+                errorDisplay.style.display = 'block';
+                return;
+            }
+
+            // Test the token with a health check
+            try {
+                const response = await fetch(`${API_URL}/health`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    authToken = token;
+                    localStorage.setItem('synote_token', token);
+                    closeLoginModal();
+                    showNotification('Logged in successfully!', 'success');
+                    loadNotes(); // Reload with auth
+                } else {
+                    errorDisplay.textContent = 'Invalid token. Please try again.';
+                    errorDisplay.style.display = 'block';
+                }
+            } catch (err) {
+                errorDisplay.textContent = 'Connection failed. Check server status.';
+                errorDisplay.style.display = 'block';
+            }
+        }
+
+        function logout() {
+            authToken = null;
+            localStorage.removeItem('synote_token');
+            notes = [];
+            currentNote = null;
+            renderNotesList();
+            document.getElementById('editorContainer').innerHTML = `
+                <div class="empty-state">
+                    <h2>Logged out</h2>
+                    <p>Refresh the page to log in again</p>
+                </div>
+            `;
+            showNotification('Logged out', 'info');
+        }
 
         async function loadNotes() {
             try {
