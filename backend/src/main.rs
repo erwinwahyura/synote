@@ -5,21 +5,34 @@ mod links;
 mod models;
 mod storage;
 mod sync;
+mod tags;
 
 use crate::api::health::{health_check, readiness_check};
 use crate::api::links::get_note_links;
 use crate::api::notes::{create_note, delete_note, get_note, list_notes, search_notes, update_note};
+use crate::api::tags::{get_note_tags, get_tagged_notes, list_tags};
 use crate::auth::{auth_middleware, AuthConfig};
 use crate::config::Config;
 use crate::links::LinksIndex;
 use crate::storage::NoteStorage;
 use crate::sync::GitSync;
+use crate::tags::TagIndex;
 use axum::{
+    extract::State,
     middleware,
     routing::{delete, get, post, put},
     Router,
 };
 use std::sync::Arc;
+
+/// Application state shared across all handlers
+#[derive(Clone)]
+struct AppState {
+    storage: Arc<NoteStorage>,
+    links_index: Arc<LinksIndex>,
+    tags_index: Arc<TagIndex>,
+    auth_config: AuthConfig,
+}
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -64,9 +77,21 @@ async fn main() -> anyhow::Result<()> {
     // Initialize links index for wikilinks/backlinks
     let links_index = Arc::new(LinksIndex::new());
     tracing::info!("Links index initialized");
+    
+    // Initialize tags index for #tag tracking
+    let tags_index = Arc::new(TagIndex::new());
+    tracing::info!("Tags index initialized");
 
     // Build auth config
     let auth_config = AuthConfig::new(config.auth.enabled, config.auth.token.clone());
+
+    // Build unified app state
+    let app_state = AppState {
+        storage: storage.clone(),
+        links_index: links_index.clone(),
+        tags_index: tags_index.clone(),
+        auth_config: auth_config.clone(),
+    };
 
     // Build our application with routes
     let app = Router::new()
@@ -79,7 +104,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/notes/:id", delete(delete_note))
         .route("/api/search", get(search_notes))
         .route("/api/notes/:id/links", get(get_note_links))
-        .layer(middleware::from_fn_with_state(auth_config.clone(), auth_middleware))
+        .route("/api/tags", get(list_tags))
+        .route("/api/tags/:tag/notes", get(get_tagged_notes))
+        .route("/api/notes/:id/tags", get(get_note_tags))
+        .layer(middleware::from_fn_with_state(app_state.clone(), auth_middleware))
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
@@ -87,9 +115,7 @@ async fn main() -> anyhow::Result<()> {
                 .allow_headers(Any),
         )
         .layer(TraceLayer::new_for_http())
-        .with_state(storage.clone())
-        .with_state(links_index)
-        .with_state(auth_config);
+        .with_state(app_state);
 
     // Run the server
     let addr = format!("{}:{}", config.server.host, config.server.port);
