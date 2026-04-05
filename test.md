@@ -1,0 +1,1 @@
+feat: Added incoming and outgoing message content to the SessionResult type to support echoing message details back to the caller during /collect operations.

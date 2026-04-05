@@ -35,16 +35,10 @@ toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Git sync (libgit2 bindings) - DISABLED temporarily
-git2 = "0.19"
-
 # Wikilinks parsing
 regex = "1.10"
 lazy_static = "1.4"
 urlencoding = "2.1"
-
-# Full-text search with Tantivy - DISABLED temporarily
-# tantivy = "0.21"
 
 
 
