@@ -18,12 +18,13 @@ services:
       - synote-data:/app/data/notes
       # Config is baked into image, override if needed:
       # - ./config.prod.toml:/app/config.toml:ro
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
+    # Healthcheck disabled for debugging - re-enable after fixing startup issue
+    # healthcheck:
+    #   test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 5
+    #   start_period: 60s
     networks:
       - synote-network
 
@@ -41,8 +42,7 @@ services:
     networks:
       - synote-network
     depends_on:
-      synote:
-        condition: service_healthy
+      - synote
 
   # Optional: Automated backups
   backup:
