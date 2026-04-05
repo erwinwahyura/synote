@@ -4,11 +4,13 @@ use tantivy::{
     schema::{Field, Schema, STORED, TEXT},
     Index, IndexReader, ReloadPolicy,
 };
-use tantivy::directory::MmapDirectory;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use anyhow::{Result, Context};
 use crate::models::Note;
+
+// Re-export Document for our usage
+type Document = tantivy::TantivyDocument;
 
 /// Full-text search index using Tantivy
 pub struct SearchIndex {
@@ -43,10 +45,13 @@ impl SearchIndex {
             content: content_field,
         };
         
-        // Open or create index
-        let mmap_dir = MmapDirectory::new(index_dir)?;
-        let index = Index::open_or_create(mmap_dir, schema.clone())
-            .context("Failed to open/create Tantivy index")?;
+        // Open or create index (Tantivy 0.21 API)
+        let index = if index_dir.exists() {
+            Index::open_in_dir(index_dir).context("Failed to open existing Tantivy index")?
+        } else {
+            std::fs::create_dir_all(index_dir)?;
+            Index::create_in_dir(index_dir, schema.clone()).context("Failed to create Tantivy index")?
+        };
         
         // Create writer
         let writer = index.writer(50_000_000)?; // 50MB heap
@@ -102,8 +107,9 @@ impl SearchIndex {
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
         let searcher = self.reader.searcher();
         let query_parser = QueryParser::new(
-            self.index.clone(),
+            self.index.schema(),
             vec![self.fields.title, self.fields.content],
+            self.index.tokenizers(),
         );
         let query = query_parser.parse_query(query)?;
         
