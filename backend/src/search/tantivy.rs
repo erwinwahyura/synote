@@ -113,10 +113,10 @@ impl SearchIndex {
         for (score, doc_address) in top_docs {
             let doc = searcher.doc(doc_address)?;
             let id = doc.get_first(self.fields.id)
-                .and_then(|v| v.as_str())
+                .and_then(|v| v.as_text())
                 .ok_or_else(|| anyhow::anyhow!("Missing id field"))?;
             let title = doc.get_first(self.fields.title)
-                .and_then(|v| v.as_str())
+                .and_then(|v| v.as_text())
                 .unwrap_or("Untitled");
             
             results.push(SearchResult {

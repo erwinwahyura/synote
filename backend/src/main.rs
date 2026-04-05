@@ -48,7 +48,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Configuration loaded: {:?}", config);
 
     // Initialize storage (git sync disabled for now - needs thread-safe implementation)
-    let storage = Arc::new(NoteStorage::new(config.storage.notes_dir)?);
+    let notes_dir = config.storage.notes_dir.clone();
+    let storage = Arc::new(NoteStorage::new(notes_dir)?);
     tracing::info!("Note storage initialized");
     
     // Initialize links index for wikilinks/backlinks
