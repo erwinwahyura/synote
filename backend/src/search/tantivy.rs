@@ -93,7 +93,7 @@ impl SearchIndex {
     
     /// Commit pending changes
     pub fn commit(&self) -> Result<()> {
-        let writer = self.writer.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+        let mut writer = self.writer.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
         writer.commit()?;
         Ok(())
     }

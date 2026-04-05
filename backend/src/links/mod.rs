@@ -79,8 +79,8 @@ impl LinksIndex {
                             .unwrap_or_else(|| "Unknown".to_string());
                         
                         incoming.push(Link {
-                            target_title: source_title, // Backlink shows source
-                            display_text: source_title.clone(),
+                            target_title: source_title.clone(), // Backlink shows source
+                            display_text: source_title,
                             heading: None,
                             target_id: Some(*source_id),
                         });

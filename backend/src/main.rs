@@ -47,26 +47,8 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::load()?;
     tracing::info!("Configuration loaded: {:?}", config);
 
-    // Initialize git sync (if enabled)
-    let git_sync = if config.sync.enabled {
-        let notes_dir = config.storage.notes_dir.to_string_lossy().to_string();
-        match GitSync::init(&notes_dir, config.sync.git_remote.clone()) {
-            Ok(sync) => {
-                tracing::info!("Git sync initialized at {}", notes_dir);
-                Some(Arc::new(sync))
-            }
-            Err(e) => {
-                tracing::warn!("Failed to initialize git sync: {}. Continuing without sync.", e);
-                None
-            }
-        }
-    } else {
-        tracing::info!("Git sync disabled");
-        None
-    };
-    
-    // Initialize storage with sync
-    let storage = Arc::new(NoteStorage::new(config.storage.notes_dir, git_sync)?);
+    // Initialize storage (git sync disabled for now - needs thread-safe implementation)
+    let storage = Arc::new(NoteStorage::new(config.storage.notes_dir)?);
     tracing::info!("Note storage initialized");
     
     // Initialize links index for wikilinks/backlinks

@@ -52,7 +52,7 @@ impl GitSync {
     }
     
     /// Spawn background task that auto-commits with debounce
-    fn spawn_auto_commit_task(&self, rx: mpsc::Receiver<()>) {
+    fn spawn_auto_commit_task(&self, mut rx: mpsc::Receiver<()>) {
         let repo_path = self.notes_path.clone();
         
         tokio::spawn(async move {
