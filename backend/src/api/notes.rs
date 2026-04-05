@@ -1,5 +1,5 @@
 use crate::models::{CreateNoteRequest, Note, UpdateNoteRequest};
-use crate::storage::NoteStorage;
+use crate::state::AppState;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -7,10 +7,7 @@ use axum::{
     Json,
 };
 use serde::Deserialize;
-use std::sync::Arc;
 use uuid::Uuid;
-
-pub type AppState = Arc<NoteStorage>;
 
 #[derive(Debug, Deserialize)]
 pub struct SearchQuery {
@@ -18,53 +15,53 @@ pub struct SearchQuery {
 }
 
 pub async fn search_notes(
-    State(storage): State<AppState>,
+    State(app_state): State<AppState>,
     Query(params): Query<SearchQuery>,
 ) -> Result<Json<Vec<Note>>, AppError> {
-    let results = storage.search(&params.q)?;
+    let results = app_state.storage.search(&params.q)?;
     Ok(Json(results))
 }
 
 pub async fn list_notes(
-    State(storage): State<AppState>,
+    State(app_state): State<AppState>,
 ) -> Result<Json<Vec<Note>>, AppError> {
-    let notes = storage.list()?;
+    let notes = app_state.storage.list()?;
     Ok(Json(notes))
 }
 
 pub async fn get_note(
-    State(storage): State<AppState>,
+    State(app_state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Note>, AppError> {
-    let note = storage.get(&id)?;
+    let note = app_state.storage.get(&id)?;
     Ok(Json(note))
 }
 
 pub async fn create_note(
-    State(storage): State<AppState>,
+    State(app_state): State<AppState>,
     Json(req): Json<CreateNoteRequest>,
 ) -> Result<(StatusCode, Json<Note>), AppError> {
     let note = Note::new(req.title, req.content, req.path);
-    let note = storage.create(note)?;
+    let note = app_state.storage.create(note)?;
     Ok((StatusCode::CREATED, Json(note)))
 }
 
 pub async fn update_note(
-    State(storage): State<AppState>,
+    State(app_state): State<AppState>,
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateNoteRequest>,
 ) -> Result<Json<Note>, AppError> {
-    let mut note = storage.get(&id)?;
+    let mut note = app_state.storage.get(&id)?;
     note.update(req.title, req.content);
-    let note = storage.update(&id, note)?;
+    let note = app_state.storage.update(&id, note)?;
     Ok(Json(note))
 }
 
 pub async fn delete_note(
-    State(storage): State<AppState>,
+    State(app_state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    storage.delete(&id)?;
+    app_state.storage.delete(&id)?;
     Ok(StatusCode::NO_CONTENT)
 }
 

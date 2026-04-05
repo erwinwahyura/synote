@@ -4,8 +4,7 @@ use axum::{
     http::StatusCode,
 };
 use serde::Serialize;
-use std::sync::Arc;
-use crate::storage::NoteStorage;
+use crate::state::AppState;
 use chrono::Utc;
 
 #[derive(Serialize)]
@@ -17,10 +16,10 @@ pub struct HealthResponse {
 }
 
 pub async fn health_check(
-    State(storage): State<Arc<NoteStorage>>,
+    State(app_state): State<AppState>,
 ) -> Result<Json<HealthResponse>, StatusCode> {
     // Try to list notes to verify storage is working
-    let notes_count = storage.list()
+    let notes_count = app_state.storage.list()
         .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?
         .len();
 

@@ -21,13 +21,15 @@ impl AuthConfig {
     }
 }
 
+use crate::state::AppState;
+
 pub async fn auth_middleware(
-    auth_config: axum::extract::State<AuthConfig>,
+    axum::extract::State(app_state): axum::extract::State<AppState>,
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
     // Skip auth if disabled
-    if !auth_config.enabled {
+    if !app_state.auth_config.enabled {
         return Ok(next.run(request).await);
     }
 
@@ -38,7 +40,7 @@ pub async fn auth_middleware(
             // Check Bearer token
             if auth_str.starts_with("Bearer ") {
                 let token = &auth_str[7..];
-                if token == auth_config.token.as_str() {
+                if token == app_state.auth_config.token.as_str() {
                     return Ok(next.run(request).await);
                 }
             }
@@ -52,7 +54,7 @@ pub async fn auth_middleware(
         if let Some(token_start) = uri.find("token=") {
             let token_part = &uri[token_start + 6..];
             let token = token_part.split('&').next().unwrap_or(token_part);
-            if token == auth_config.token.as_str() {
+            if token == app_state.auth_config.token.as_str() {
                 return Ok(next.run(request).await);
             }
         }

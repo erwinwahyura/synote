@@ -3,6 +3,7 @@ mod auth;
 mod config;
 mod links;
 mod models;
+mod state;
 mod storage;
 mod sync;
 mod tags;
@@ -14,25 +15,16 @@ use crate::api::tags::{get_note_tags, get_tagged_notes, list_tags};
 use crate::auth::{auth_middleware, AuthConfig};
 use crate::config::Config;
 use crate::links::LinksIndex;
+use crate::state::AppState;
 use crate::storage::NoteStorage;
 use crate::sync::GitSync;
 use crate::tags::TagIndex;
 use axum::{
-    extract::State,
     middleware,
     routing::{delete, get, post, put},
     Router,
 };
 use std::sync::Arc;
-
-/// Application state shared across all handlers
-#[derive(Clone)]
-struct AppState {
-    storage: Arc<NoteStorage>,
-    links_index: Arc<LinksIndex>,
-    tags_index: Arc<TagIndex>,
-    auth_config: AuthConfig,
-}
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -86,12 +78,12 @@ async fn main() -> anyhow::Result<()> {
     let auth_config = AuthConfig::new(config.auth.enabled, config.auth.token.clone());
 
     // Build unified app state
-    let app_state = AppState {
-        storage: storage.clone(),
-        links_index: links_index.clone(),
-        tags_index: tags_index.clone(),
-        auth_config: auth_config.clone(),
-    };
+    let app_state = AppState::new(
+        storage.clone(),
+        links_index.clone(),
+        tags_index.clone(),
+        auth_config.clone(),
+    );
 
     // Build our application with routes
     let app = Router::new()
