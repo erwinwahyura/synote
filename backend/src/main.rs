@@ -20,7 +20,7 @@ use crate::links::LinksIndex;
 // use crate::search::SearchIndex; // Disabled - Tantivy API compatibility
 use crate::state::AppState;
 use crate::storage::NoteStorage;
-use crate::sync::GitSync;
+// use crate::sync::GitSync; // Disabled
 use crate::tags::TagIndex;
 use axum::{
     middleware,
@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
     
     // Initialize Tantivy search index - DISABLED for now due to API compatibility
     // TODO: Fix Tantivy 0.21 API issues and re-enable
-    let search_index: Option<Arc<SearchIndex>> = None;
+    // let _search_index: Option<Arc<()>> = None; // SearchIndex disabled
     tracing::info!("Tantivy search index disabled (using naive search)");
 
     // Build auth config
@@ -73,7 +73,6 @@ async fn main() -> anyhow::Result<()> {
         storage.clone(),
         links_index.clone(),
         tags_index.clone(),
-        search_index.clone(),
         auth_config.clone(),
     );
 
