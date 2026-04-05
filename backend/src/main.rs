@@ -3,7 +3,7 @@ mod auth;
 mod config;
 mod links;
 mod models;
-mod search;
+// mod search; // Disabled - Tantivy removed temporarily
 mod state;
 mod storage;
 mod sync;
