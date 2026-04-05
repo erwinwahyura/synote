@@ -49,4 +49,33 @@
 
 **Ready for use.** 🐹⚡
 
-**Go**, continuing frontend work.
+---
+
+### ✅ 10:35 UTC - VPS DEPLOYMENT COMPLETE
+**URL:** https://research.erwarx.com  
+**Status:** 🟢 LIVE with HTTPS (Let's Encrypt)
+
+**Infrastructure:**
+- Backend: Docker container on 127.0.0.1:8089
+- Proxy: System Caddy with automatic HTTPS
+- Domain: research.erwarx.com
+- Auth: Enabled (token: changeme)
+
+**Deployment fixes applied:**
+- Single-threaded build (-j 1) for low-memory VPS
+- Fixed Rust raw string literal bug (r#"..."# → escaped quotes)
+- Fixed parse_wikilinks visibility (pub)
+- Added system Caddy reverse proxy config
+
+**Features live:**
+- ✅ Git sync (ready but needs manual git remote config)
+- ✅ Wikilinks [[Note]]
+- ✅ Tags #tag
+- ✅ Backlinks panel
+- ✅ Graph view 🕸️
+- ✅ Full-text search
+- ✅ Auth + HTTPS
+
+---
+
+**Go**, mission accomplished. 🐹⚡
