@@ -331,6 +331,31 @@
             text-decoration: underline;
         }
 
+        .preview-content a.wikilink {
+            color: #007bff;
+            background: #f0f7ff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .preview-content a.wikilink:hover {
+            background: #007bff;
+            color: white;
+        }
+
+        .preview-content a.wikilink.broken {
+            color: #dc3545;
+            background: #fff0f0;
+            border: 1px dashed #dc3545;
+        }
+
+        .preview-content a.wikilink.broken:hover {
+            background: #dc3545;
+            color: white;
+        }
+
         .preview-content table {
             border-collapse: collapse;
             width: 100%;
@@ -364,6 +389,121 @@
 
         .empty-state h2 {
             margin-bottom: 10px;
+        }
+
+        /* Tags display */
+        .tags-display {
+            padding: 10px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            min-height: 40px;
+        }
+
+        .tag {
+            display: inline-block;
+            background: #e9ecef;
+            color: #495057;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin-right: 8px;
+            margin-bottom: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .tag:hover {
+            background: #007bff;
+            color: white;
+        }
+
+        /* Editor with sidebar layout */
+        .editor-with-sidebar {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .editor-with-sidebar .editor-split {
+            flex: 1;
+        }
+
+        /* Backlinks sidebar */
+        .backlinks-sidebar {
+            width: 250px;
+            border-left: 1px solid #e0e0e0;
+            background: #fafafa;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .backlinks-header {
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 13px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .backlinks-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 0;
+        }
+
+        .backlinks-section {
+            margin-bottom: 16px;
+        }
+
+        .backlinks-section-title {
+            padding: 8px 16px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #6c757d;
+            letter-spacing: 0.5px;
+        }
+
+        .backlink-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-left: 3px solid transparent;
+        }
+
+        .backlink-item:hover {
+            background: #f0f0f0;
+            border-left-color: #007bff;
+        }
+
+        .backlink-item.broken {
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .backlink-title {
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .backlink-item.broken .backlink-title::after {
+            content: " (create)";
+            color: #dc3545;
+            font-size: 11px;
+        }
+
+        .no-backlinks {
+            padding: 20px 16px;
+            text-align: center;
+            color: #999;
+            font-size: 13px;
+        }
+
+        .loading {
+            padding: 20px;
+            text-align: center;
+            color: #999;
         }
 
         /* Animations */
@@ -641,27 +781,191 @@
                            value="${escapeHtml(currentNote.title)}"
                            placeholder="Note title"
                            oninput="updatePreview()">
-                    <div class="editor-split">
-                        <div class="editor-pane">
-                            <div class="editor-pane-header">Markdown</div>
-                            <textarea class="editor-body" id="noteContent"
-                                      placeholder="Write your note in markdown..."
-                                      oninput="updatePreview()">${escapeHtml(currentNote.content)}</textarea>
+                    <div class="tags-display" id="tagsDisplay"></div>
+                    <div class="editor-with-sidebar">
+                        <div class="editor-split">
+                            <div class="editor-pane">
+                                <div class="editor-pane-header">Markdown</div>
+                                <textarea class="editor-body" id="noteContent"
+                                          placeholder="Write your note in markdown..."
+                                          oninput="updatePreview()">${escapeHtml(currentNote.content)}</textarea>
+                            </div>
+                            <div class="preview-pane">
+                                <div class="editor-pane-header">Preview</div>
+                                <div class="preview-content" id="previewContent"></div>
+                            </div>
                         </div>
-                        <div class="preview-pane">
-                            <div class="editor-pane-header">Preview</div>
-                            <div class="preview-content" id="previewContent"></div>
+                        <div class="backlinks-sidebar" id="backlinksSidebar">
+                            <div class="backlinks-header">Linked References</div>
+                            <div class="backlinks-content" id="backlinksContent">
+                                <div class="loading">Loading...</div>
+                            </div>
                         </div>
                     </div>
                 </div>
             `;
             updatePreview();
+            loadAndRenderBacklinks(currentNote.id);
+        }
+
+        async function loadAndRenderBacklinks(noteId) {
+            const linksData = await loadBacklinks(noteId);
+            renderBacklinks(linksData);
+        }
+
+        function renderBacklinks(linksData) {
+            const container = document.getElementById('backlinksContent');
+            if (!container) return;
+
+            if (!linksData || (!linksData.outgoing?.length && !linksData.incoming?.length)) {
+                container.innerHTML = '<div class="no-backlinks">No links to or from this note</div>';
+                return;
+            }
+
+            let html = '';
+            
+            // Incoming links (backlinks) - most important
+            if (linksData.incoming?.length > 0) {
+                html += '<div class="backlinks-section"><div class="backlinks-section-title">Links to this note</div>';
+                html += linksData.incoming.map(link => `
+                    <div class="backlink-item" onclick="loadNote('${link.target_id}')">
+                        <div class="backlink-title">${escapeHtml(link.display_text)}</div>
+                    </div>
+                `).join('');
+                html += '</div>';
+            }
+
+            // Outgoing links
+            if (linksData.outgoing?.length > 0) {
+                html += '<div class="backlinks-section"><div class="backlinks-section-title">Links from this note</div>';
+                html += linksData.outgoing.map(link => {
+                    if (link.exists) {
+                        return `<div class="backlink-item ${link.target_id ? '' : 'broken'}" onclick="${link.target_id ? `loadNote('${link.target_id}')` : `createNoteFromLink('${link.target_title.replace(/'/g, "\\'")}')`}">
+                            <div class="backlink-title">${escapeHtml(link.display_text)}</div>
+                        </div>`;
+                    } else {
+                        return `<div class="backlink-item broken" onclick="createNoteFromLink('${link.target_title.replace(/'/g, "\\'")}')">
+                            <div class="backlink-title">${escapeHtml(link.display_text)} <span class="create-note">+</span></div>
+                        </div>`;
+                    }
+                }).join('');
+                html += '</div>';
+            }
+
+            container.innerHTML = html;
         }
 
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // Parse wikilinks [[...]] and return metadata
+        function parseWikilinks(text) {
+            const wikilinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+            const links = [];
+            let match;
+            while ((match = wikilinkRegex.exec(text)) !== null) {
+                const fullTarget = match[1].trim();
+                const alias = match[2]?.trim();
+                
+                // Split target and heading
+                const hashIndex = fullTarget.indexOf('#');
+                const targetTitle = hashIndex >= 0 ? fullTarget.substring(0, hashIndex).trim() : fullTarget;
+                const heading = hashIndex >= 0 ? fullTarget.substring(hashIndex + 1).trim() : null;
+                
+                links.push({
+                    fullMatch: match[0],
+                    targetTitle,
+                    displayText: alias || targetTitle,
+                    heading,
+                    start: match.index,
+                    end: match.index + match[0].length
+                });
+            }
+            return links;
+        }
+
+        // Find note by title (case-insensitive)
+        function findNoteByTitle(title) {
+            return notes.find(n => n.title.toLowerCase() === title.toLowerCase());
+        }
+
+        // Render wikilinks as clickable links
+        function renderWikilinks(content) {
+            const links = parseWikilinks(content);
+            let result = content;
+            
+            // Replace from end to start to preserve indices
+            for (let i = links.length - 1; i >= 0; i--) {
+                const link = links[i];
+                const targetNote = findNoteByTitle(link.targetTitle);
+                
+                if (targetNote) {
+                    // Existing note - link to it
+                    const replacement = `<a href="#" onclick="loadNote('${targetNote.id}'); return false;" class="wikilink">${link.displayText}</a>`;
+                    result = result.substring(0, link.start) + replacement + result.substring(link.end);
+                } else {
+                    // Broken link - offer to create
+                    const replacement = `<a href="#" onclick="createNoteFromLink('${link.targetTitle.replace(/'/g, "\\'")}'); return false;" class="wikilink broken" title="Click to create note">${link.displayText}</a>`;
+                    result = result.substring(0, link.start) + replacement + result.substring(link.end);
+                }
+            }
+            
+            return result;
+        }
+
+        // Create new note from wikilink click
+        async function createNoteFromLink(title) {
+            try {
+                const response = await apiCall('/notes', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        title: title,
+                        content: ''
+                    })
+                });
+                const newNote = await response.json();
+                notes.push(newNote);
+                await loadNotes();
+                loadNote(newNote.id);
+                showNotification(`Created note: ${title}`, 'success');
+            } catch (error) {
+                console.error('Failed to create note:', error);
+                showNotification('Failed to create note', 'error');
+            }
+        }
+
+        // Extract tags from content
+        function extractTags(content) {
+            // Match #tag but not hex colors (#fff, #123456)
+            const tagRegex = /(?<![a-zA-Z0-9])#([a-zA-Z0-9_\-/]+)/g;
+            const hexColorRegex = /^#[a-fA-F0-9]{6}$|^#[a-fA-F0-9]{3}$/;
+            const tags = new Set();
+            
+            let match;
+            while ((match = tagRegex.exec(content)) !== null) {
+                const tag = match[1].toLowerCase();
+                // Skip hex colors
+                if (!hexColorRegex.test('#' + tag)) {
+                    tags.add(tag);
+                }
+            }
+            
+            return Array.from(tags);
+        }
+
+        // Load and display backlinks
+        async function loadBacklinks(noteId) {
+            try {
+                const response = await apiCall(`/notes/${noteId}/links`);
+                if (!response.ok) return null;
+                return await response.json();
+            } catch (error) {
+                console.error('Failed to load backlinks:', error);
+                return null;
+            }
         }
 
         function updatePreview() {
@@ -687,11 +991,46 @@
             });
 
             // Render markdown
-            const html = marked.parse(content);
+            let html = marked.parse(content);
+            
+            // Render wikilinks
+            html = renderWikilinks(html);
+            
             previewElement.innerHTML = html;
+
+            // Update tags display
+            updateTagsDisplay(content);
 
             // Trigger auto-save
             scheduleAutoSave();
+        }
+
+        function updateTagsDisplay(content) {
+            const tagsContainer = document.getElementById('tagsDisplay');
+            if (!tagsContainer) return;
+            
+            const tags = extractTags(content);
+            if (tags.length === 0) {
+                tagsContainer.innerHTML = '';
+                return;
+            }
+            
+            tagsContainer.innerHTML = tags.map(tag => 
+                `<span class="tag" onclick="filterByTag('${tag.replace(/'/g, "\\'")}')">#${tag}</span>`
+            ).join(' ');
+        }
+
+        async function filterByTag(tag) {
+            isSearching = true;
+            try {
+                const response = await apiCall(`/tags/${encodeURIComponent(tag)}/notes`);
+                notes = await response.json();
+                renderNotesList();
+                showNotification(`Showing notes with #${tag}`, 'info');
+            } catch (error) {
+                console.error('Failed to filter by tag:', error);
+                showNotification('Failed to filter', 'error');
+            }
         }
 
         function scheduleAutoSave() {

@@ -2,15 +2,28 @@
 
 ---
 
-### 🪪 07:18 UTC - Identity Correction
-Git commits will now be authored as **Hiru** (erwinwahyura) instead of Elesis (OpenClaw).
+### ✅ 07:43 UTC - State Refactor Pushed
+**Commit:** `648632f`
+- Unified `state::AppState` with all state components
+- All API handlers updated (notes, links, tags, health)
+- Auth middleware updated
+- Clean architecture ready for frontend
 
-Config updated in synote repo:
-- `user.name = "Hiru"`
-- `user.email = "erwinwahyura@users.noreply.github.com"`
+**Authored as:** @erwinwahyura
 
-Future commits will show on GitHub as @erwinwahyura.
+### 🎯 Next: Frontend Features
+1. Render `[[Note]]` as clickable links
+2. Backlinks panel in note view
+3. Tag filter UI
 
----
+### Progress Summary
+| Feature | Backend | Frontend |
+|---------|---------|----------|
+| Git sync | ✅ | N/A |
+| Wikilinks `[[Note]]` | ✅ | ⏳ |
+| Tags `#tag` | ✅ | ⏳ |
+| Auth/HTTPS/Docker | ✅ | N/A |
+| Tantivy search | ⏳ | ⏳ |
+| Graph view | ⏳ | ⏳ |
 
-**Go**, standing by.
+**Go**, continuing frontend work.
