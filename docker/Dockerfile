@@ -1,11 +1,13 @@
-FROM rust:1.88 as builder
+FROM rust:1.88 AS builder
 
 WORKDIR /app
 
-# Copy entire backend
-COPY backend/ ./
+# Copy manifests first for caching
+COPY backend/Cargo.toml backend/Cargo.lock* ./
+RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
 
-# Build the application
+# Copy source and build
+COPY backend/src ./src
 RUN cargo build --release
 
 # Runtime stage
