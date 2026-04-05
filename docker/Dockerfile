@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Copy and build directly (no dummy stage)
 COPY backend/ ./
-RUN cargo build --release
+RUN cargo build --release -j 1
 
 # Runtime stage
 FROM debian:bookworm-slim
