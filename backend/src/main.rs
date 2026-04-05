@@ -1,14 +1,17 @@
 mod api;
 mod auth;
 mod config;
+mod links;
 mod models;
 mod storage;
 mod sync;
 
 use crate::api::health::{health_check, readiness_check};
+use crate::api::links::get_note_links;
 use crate::api::notes::{create_note, delete_note, get_note, list_notes, search_notes, update_note};
 use crate::auth::{auth_middleware, AuthConfig};
 use crate::config::Config;
+use crate::links::LinksIndex;
 use crate::storage::NoteStorage;
 use crate::sync::GitSync;
 use axum::{
@@ -57,6 +60,10 @@ async fn main() -> anyhow::Result<()> {
     // Initialize storage with sync
     let storage = Arc::new(NoteStorage::new(config.storage.notes_dir, git_sync)?);
     tracing::info!("Note storage initialized");
+    
+    // Initialize links index for wikilinks/backlinks
+    let links_index = Arc::new(LinksIndex::new());
+    tracing::info!("Links index initialized");
 
     // Build auth config
     let auth_config = AuthConfig::new(config.auth.enabled, config.auth.token.clone());
@@ -71,6 +78,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/notes/:id", put(update_note))
         .route("/api/notes/:id", delete(delete_note))
         .route("/api/search", get(search_notes))
+        .route("/api/notes/:id/links", get(get_note_links))
         .layer(middleware::from_fn_with_state(auth_config.clone(), auth_middleware))
         .layer(
             CorsLayer::new()
@@ -79,7 +87,8 @@ async fn main() -> anyhow::Result<()> {
                 .allow_headers(Any),
         )
         .layer(TraceLayer::new_for_http())
-        .with_state(storage)
+        .with_state(storage.clone())
+        .with_state(links_index)
         .with_state(auth_config);
 
     // Run the server

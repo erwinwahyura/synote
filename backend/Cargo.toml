@@ -38,6 +38,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Git sync (libgit2 bindings)
 git2 = "0.19"
 
+# Wikilinks parsing
+regex = "1.10"
+lazy_static = "1.4"
+urlencoding = "2.1"
+
 # Search (we'll add Tantivy later for full-text search)
 # tantivy = "0.21"
 
