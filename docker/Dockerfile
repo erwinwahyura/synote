@@ -14,7 +14,7 @@ RUN cargo build --release
 FROM debian:bookworm-slim
 
 RUN apt-get update && \
-    apt-get install -y ca-certificates wget && \
+    apt-get install -y ca-certificates wget curl procps && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -25,9 +25,10 @@ COPY --from=builder /app/target/release/synote /app/synote
 # Create data directory
 RUN mkdir -p /app/data/notes
 
-# Copy configuration
-COPY config.toml /app/config.toml
+# Copy production configuration (binds to 0.0.0.0 for Docker)
+COPY docker/config.prod.toml /app/config.toml
 
 EXPOSE 8080
 
+# Run with logging
 CMD ["./synote"]
