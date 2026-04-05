@@ -9,6 +9,7 @@ mod storage;
 mod sync;
 mod tags;
 
+use crate::api::graph::get_graph;
 use crate::api::health::{health_check, readiness_check};
 use crate::api::links::get_note_links;
 use crate::api::notes::{create_note, delete_note, get_note, list_notes, search_notes, update_note};
@@ -134,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/tags", get(list_tags))
         .route("/api/tags/:tag/notes", get(get_tagged_notes))
         .route("/api/notes/:id/tags", get(get_note_tags))
+        .route("/api/graph", get(get_graph))
         .layer(middleware::from_fn_with_state(app_state.clone(), auth_middleware))
         .layer(
             CorsLayer::new()

@@ -29,7 +29,7 @@
 | Wikilinks `[[Note]]` | ✅ | ✅ |
 | Tags `#tag` | ✅ | ✅ |
 | Auth/HTTPS/Docker | ✅ | N/A |
-| Tantivy search | ⏳ | ⏳ |
-| Graph view | ⏳ | ⏳ |
+| Tantivy search | ✅ | N/A |
+| **Graph view** | ✅ | ✅ |
 
 **Go**, continuing frontend work.
