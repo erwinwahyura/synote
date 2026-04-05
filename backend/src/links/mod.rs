@@ -94,7 +94,7 @@ impl LinksIndex {
 }
 
 /// Parse wikilinks [[...]] from markdown content
-fn parse_wikilinks(content: &str, all_notes: &[Note]) -> Vec<Link> {
+pub fn parse_wikilinks(content: &str, all_notes: &[Note]) -> Vec<Link> {
     lazy_static::lazy_static! {
         // Match [[target|alias]] or [[target#heading|alias]] or [[target]]
         // Groups: 1 = target (with optional #heading), 2 = optional alias
