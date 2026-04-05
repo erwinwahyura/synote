@@ -17,7 +17,7 @@ use crate::api::tags::{get_note_tags, get_tagged_notes, list_tags};
 use crate::auth::{auth_middleware, AuthConfig};
 use crate::config::Config;
 use crate::links::LinksIndex;
-use crate::search::SearchIndex;
+// use crate::search::SearchIndex; // Disabled - Tantivy API compatibility
 use crate::state::AppState;
 use crate::storage::NoteStorage;
 use crate::sync::GitSync;
@@ -60,37 +60,10 @@ async fn main() -> anyhow::Result<()> {
     let tags_index = Arc::new(TagIndex::new());
     tracing::info!("Tags index initialized");
     
-    // Initialize Tantivy search index
-    let search_index: Option<Arc<SearchIndex>> = {
-        let index_dir = config.storage.notes_dir.join(".tantivy");
-        match SearchIndex::open(&index_dir) {
-            Ok(index) => {
-                tracing::info!("Search index initialized at {:?}", index_dir);
-                let index = Arc::new(index);
-                
-                // Index all existing notes
-                if let Ok(all_notes) = storage.list() {
-                    tracing::info!("Indexing {} notes for search...", all_notes.len());
-                    for note in &all_notes {
-                        if let Err(e) = index.index_note(note) {
-                            tracing::warn!("Failed to index note {}: {}", note.id, e);
-                        }
-                    }
-                    if let Err(e) = index.commit() {
-                        tracing::warn!("Failed to commit search index: {}", e);
-                    } else {
-                        tracing::info!("Search index populated successfully");
-                    }
-                }
-                
-                Some(index)
-            }
-            Err(e) => {
-                tracing::warn!("Failed to initialize search index: {}. Continuing without full-text search.", e);
-                None
-            }
-        }
-    };
+    // Initialize Tantivy search index - DISABLED for now due to API compatibility
+    // TODO: Fix Tantivy 0.21 API issues and re-enable
+    let search_index: Option<Arc<SearchIndex>> = None;
+    tracing::info!("Tantivy search index disabled (using naive search)");
 
     // Build auth config
     let auth_config = AuthConfig::new(config.auth.enabled, config.auth.token.clone());
