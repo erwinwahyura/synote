@@ -6,9 +6,9 @@ WORKDIR /app
 COPY backend/Cargo.toml backend/Cargo.lock* ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
 
-# Copy source and force rebuild
+# Copy source and force full rebuild
 COPY backend/src ./src
-RUN rm -f target/release/synote && cargo build --release
+RUN cargo clean && cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim
