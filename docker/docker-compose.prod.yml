@@ -1,5 +1,5 @@
-# Production Docker Compose
-# For running Synote in production with HTTPS and reverse proxy
+# Production Docker Compose - Synote only
+# Uses existing system Caddy for HTTPS (port 80/443 already in use)
 
 version: '3.8'
 
@@ -18,31 +18,16 @@ services:
       - synote-data:/app/data/notes
       # Config is baked into image, override if needed:
       # - ./config.prod.toml:/app/config.toml:ro
-    # Healthcheck disabled for debugging - re-enable after fixing startup issue
-    # healthcheck:
-    #   test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/health"]
-    #   interval: 10s
-    #   timeout: 5s
-    #   retries: 5
-    #   start_period: 60s
-    networks:
-      - synote-network
-
-  caddy:
-    image: caddy:2-alpine
-    container_name: synote-proxy
-    restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
+      - "127.0.0.1:8089:8080"  # Localhost only - system Caddy proxies
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     networks:
       - synote-network
-    depends_on:
-      - synote
 
   # Optional: Automated backups
   backup:
@@ -58,8 +43,6 @@ services:
 
 volumes:
   synote-data:
-  caddy-data:
-  caddy-config:
 
 networks:
   synote-network:
