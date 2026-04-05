@@ -1,21 +1,30 @@
 use crate::models::Note;
+use crate::sync::GitSync;
 use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
 pub struct NoteStorage {
     notes_dir: PathBuf,
+    sync: Option<Arc<GitSync>>,
 }
 
 impl NoteStorage {
-    pub fn new(notes_dir: PathBuf) -> Result<Self> {
+    pub fn new(notes_dir: PathBuf, sync: Option<Arc<GitSync>>) -> Result<Self> {
         // Create notes directory if it doesn't exist
         fs::create_dir_all(&notes_dir)
             .context("Failed to create notes directory")?;
 
-        Ok(Self { notes_dir })
+        Ok(Self { notes_dir, sync })
+    }
+    
+    fn notify_change(&self) {
+        if let Some(ref sync) = self.sync {
+            sync.notify_change();
+        }
     }
 
     fn parse_note_file(&self, path: &Path) -> Result<Note> {
@@ -98,6 +107,7 @@ impl NoteStorage {
 
     pub fn create(&self, note: Note) -> Result<Note> {
         self.write_note_file(&note)?;
+        self.notify_change();
         Ok(note)
     }
 
@@ -151,6 +161,7 @@ impl NoteStorage {
         note.path = old_note.path;
 
         self.write_note_file(&note)?;
+        self.notify_change();
         Ok(note)
     }
 
@@ -158,6 +169,7 @@ impl NoteStorage {
         let note = self.get(id)?;
         let path = self.notes_dir.join(&note.path);
         fs::remove_file(path)?;
+        self.notify_change();
         Ok(())
     }
 

@@ -35,6 +35,9 @@ toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# Git sync (libgit2 bindings)
+git2 = "0.19"
+
 # Search (we'll add Tantivy later for full-text search)
 # tantivy = "0.21"
 

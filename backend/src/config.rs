@@ -6,6 +6,7 @@ pub struct Config {
     pub server: ServerConfig,
     pub storage: StorageConfig,
     pub auth: AuthConfig,
+    pub sync: SyncConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +29,18 @@ pub struct AuthConfig {
     pub enabled: bool,
     #[serde(default = "default_token")]
     pub token: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_git_remote")]
+    pub git_remote: Option<String>,
+}
+
+fn default_git_remote() -> Option<String> {
+    std::env::var("SYNOTE_GIT_REMOTE").ok()
 }
 
 fn default_host() -> String {
@@ -59,6 +72,10 @@ impl Default for Config {
             auth: AuthConfig {
                 enabled: false,
                 token: default_token(),
+            },
+            sync: SyncConfig {
+                enabled: default_git_remote().is_some(),
+                git_remote: default_git_remote(),
             },
         }
     }

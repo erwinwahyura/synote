@@ -3,12 +3,14 @@ mod auth;
 mod config;
 mod models;
 mod storage;
+mod sync;
 
 use crate::api::health::{health_check, readiness_check};
 use crate::api::notes::{create_note, delete_note, get_note, list_notes, search_notes, update_note};
 use crate::auth::{auth_middleware, AuthConfig};
 use crate::config::Config;
 use crate::storage::NoteStorage;
+use crate::sync::GitSync;
 use axum::{
     middleware,
     routing::{delete, get, post, put},
@@ -34,8 +36,26 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::load()?;
     tracing::info!("Configuration loaded: {:?}", config);
 
-    // Initialize storage
-    let storage = Arc::new(NoteStorage::new(config.storage.notes_dir)?);
+    // Initialize git sync (if enabled)
+    let git_sync = if config.sync.enabled {
+        let notes_dir = config.storage.notes_dir.to_string_lossy().to_string();
+        match GitSync::init(&notes_dir, config.sync.git_remote.clone()) {
+            Ok(sync) => {
+                tracing::info!("Git sync initialized at {}", notes_dir);
+                Some(Arc::new(sync))
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize git sync: {}. Continuing without sync.", e);
+                None
+            }
+        }
+    } else {
+        tracing::info!("Git sync disabled");
+        None
+    };
+    
+    // Initialize storage with sync
+    let storage = Arc::new(NoteStorage::new(config.storage.notes_dir, git_sync)?);
     tracing::info!("Note storage initialized");
 
     // Build auth config

@@ -4,3 +4,11 @@ port = 8080
 
 [storage]
 notes_dir = "./data/notes"
+
+[auth]
+enabled = false
+token = "changeme"
+
+[sync]
+enabled = false
+# git_remote = "https://github.com/username/synote-notes.git"
