@@ -145,14 +145,14 @@ pub fn render_wikilinks(content: &str, links: &[Link]) -> String {
         let pattern = if link.target_id.is_some() {
             // Existing note - link to it
             format!(
-                r#"<a href="#/note/{}" class="wikilink">{}</a>"#,
+                "<a href=\"#/note/{}\" class=\"wikilink\">{}</a>",
                 link.target_id.unwrap(),
                 link.display_text
             )
         } else {
             // Broken link - show with 'create' indicator
             format!(
-                r#"<a href="#/create?title={}" class="wikilink broken" data-title="{}">{}</a>"#,
+                "<a href=\"#/create?title={}\" class=\"wikilink broken\" data-title=\"{}\">{}</a>",
                 urlencoding::encode(&link.target_title),
                 link.target_title,
                 link.display_text
