@@ -36,7 +36,7 @@ impl GitSync {
             config.set_str("user.email", "synote@local")?;
         }
         
-        let (debounce_tx, mut debounce_rx) = mpsc::channel(1);
+        let (debounce_tx, debounce_rx) = mpsc::channel(1);
         
         let sync = Self {
             repo,
@@ -52,7 +52,7 @@ impl GitSync {
     }
     
     /// Spawn background task that auto-commits with debounce
-    fn spawn_auto_commit_task(&self, mut rx: mpsc::Receiver<()>) {
+    fn spawn_auto_commit_task(&self, rx: mpsc::Receiver<()>) {
         let repo_path = self.notes_path.clone();
         
         tokio::spawn(async move {

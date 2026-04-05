@@ -1,12 +1,12 @@
 use tantivy::{
     collector::TopDocs,
-    doc,
     query::QueryParser,
     schema::{Field, Schema, STORED, TEXT},
-    Index, IndexReader, IndexWriter, ReloadPolicy,
+    Index, IndexReader, ReloadPolicy,
 };
+use tantivy::directory::MmapDirectory;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 use anyhow::{Result, Context};
 use crate::models::Note;
 
@@ -15,7 +15,7 @@ pub struct SearchIndex {
     index: Index,
     schema: Schema,
     fields: SearchFields,
-    writer: Arc<RwLock<IndexWriter>>,
+    writer: Arc<Mutex<tantivy::IndexWriter>>,
     reader: IndexReader,
 }
 
@@ -44,7 +44,8 @@ impl SearchIndex {
         };
         
         // Open or create index
-        let index = Index::open_or_create(MMapDirectory::new(index_dir)?, schema.clone())
+        let mmap_dir = MmapDirectory::new(index_dir)?;
+        let index = Index::open_or_create(mmap_dir, schema.clone())
             .context("Failed to open/create Tantivy index")?;
         
         // Create writer
@@ -66,18 +67,17 @@ impl SearchIndex {
     
     /// Add or update a note in the index
     pub fn index_note(&self, note: &Note) -> Result<()> {
-        let mut writer = self.writer.write().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+        let writer = self.writer.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
         
         // Delete existing document with same ID
         let id_term = tantivy::Term::from_field_text(self.fields.id, &note.id.to_string());
         writer.delete_term(id_term);
         
         // Add new document
-        let doc = doc!(
-            self.fields.id => note.id.to_string(),
-            self.fields.title => note.title.clone(),
-            self.fields.content => note.content.clone(),
-        );
+        let mut doc = tantivy::TantivyDocument::default();
+        doc.add_text(self.fields.id, &note.id.to_string());
+        doc.add_text(self.fields.title, &note.title);
+        doc.add_text(self.fields.content, &note.content);
         writer.add_document(doc)?;
         
         Ok(())
@@ -85,7 +85,7 @@ impl SearchIndex {
     
     /// Remove a note from the index
     pub fn remove_note(&self, note_id: &uuid::Uuid) -> Result<()> {
-        let mut writer = self.writer.write().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+        let writer = self.writer.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
         let id_term = tantivy::Term::from_field_text(self.fields.id, &note_id.to_string());
         writer.delete_term(id_term);
         Ok(())
@@ -93,7 +93,7 @@ impl SearchIndex {
     
     /// Commit pending changes
     pub fn commit(&self) -> Result<()> {
-        let mut writer = self.writer.write().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
+        let writer = self.writer.lock().map_err(|_| anyhow::anyhow!("Lock poisoned"))?;
         writer.commit()?;
         Ok(())
     }
@@ -101,7 +101,10 @@ impl SearchIndex {
     /// Search notes
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
         let searcher = self.reader.searcher();
-        let query_parser = QueryParser::for_index(&self.index, vec![self.fields.title, self.fields.content]);
+        let query_parser = QueryParser::new(
+            self.index.clone(),
+            vec![self.fields.title, self.fields.content],
+        );
         let query = query_parser.parse_query(query)?;
         
         let top_docs = searcher.search(&query, &TopDocs::with_limit(limit))?;
@@ -110,10 +113,10 @@ impl SearchIndex {
         for (score, doc_address) in top_docs {
             let doc = searcher.doc(doc_address)?;
             let id = doc.get_first(self.fields.id)
-                .and_then(|v| v.as_text())
+                .and_then(|v| v.as_str())
                 .ok_or_else(|| anyhow::anyhow!("Missing id field"))?;
             let title = doc.get_first(self.fields.title)
-                .and_then(|v| v.as_text())
+                .and_then(|v| v.as_str())
                 .unwrap_or("Untitled");
             
             results.push(SearchResult {
@@ -134,5 +137,4 @@ pub struct SearchResult {
     pub score: f32,
 }
 
-// Need to import MMapDirectory
-use tantivy::directory::MMapDirectory;
+
