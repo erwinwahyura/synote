@@ -43,8 +43,8 @@ regex = "1.10"
 lazy_static = "1.4"
 urlencoding = "2.1"
 
-# Search (we'll add Tantivy later for full-text search)
-# tantivy = "0.21"
+# Full-text search with Tantivy
+tantivy = "0.21"
 
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["json"] }

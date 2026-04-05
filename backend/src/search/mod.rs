@@ -1,3 +1,10 @@
-// Search module
-// This will contain full-text search functionality using Tantivy
-// Coming soon in Phase 2
+//! Full-text search using Tantivy
+//! 
+//! Features:
+//! - Fast full-text search across all note content
+//! - BM25 scoring for relevance
+//! - Incremental indexing
+
+pub mod tantivy;
+
+pub use tantivy::{SearchIndex, SearchResult};
