@@ -18,26 +18,9 @@ pub async fn search_notes(
     State(app_state): State<AppState>,
     Query(params): Query<SearchQuery>,
 ) -> Result<Json<Vec<Note>>, AppError> {
-    // Use Tantivy if available, fall back to naive search
-    if let Some(ref search_index) = app_state.search_index {
-        let search_results = search_index.search(&params.q, 50)
-            .map_err(AppError::from)?;
-        
-        // Fetch full notes for search results
-        let mut notes = Vec::new();
-        for result in search_results {
-            if let Ok(id) = uuid::Uuid::parse_str(&result.id) {
-                if let Ok(note) = app_state.storage.get(&id) {
-                    notes.push(note);
-                }
-            }
-        }
-        Ok(Json(notes))
-    } else {
-        // Fall back to naive storage search
-        let results = app_state.storage.search(&params.q)?;
-        Ok(Json(results))
-    }
+    // Naive storage search (Tantivy disabled temporarily)
+    let results = app_state.storage.search(&params.q)?;
+    Ok(Json(results))
 }
 
 pub async fn list_notes(
