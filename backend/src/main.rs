@@ -6,7 +6,7 @@ mod models;
 // mod search; // Disabled - Tantivy removed temporarily
 mod state;
 mod storage;
-mod sync;
+// mod sync; // Disabled - git2 compilation errors
 mod tags;
 
 use crate::api::graph::get_graph;
