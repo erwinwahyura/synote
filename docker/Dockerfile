@@ -2,19 +2,10 @@ FROM rust:1.88 as builder
 
 WORKDIR /app
 
-# Copy manifests
-COPY backend/Cargo.toml backend/Cargo.lock* ./
+# Copy entire backend
+COPY backend/ ./
 
-# Create a dummy main.rs to build dependencies
-RUN mkdir src && \
-    echo "fn main() {println!(\"dummy\")}" > src/main.rs && \
-    cargo build --release && \
-    rm -rf src
-
-# Copy source code
-COPY backend/src ./src
-
-# Build the actual application
+# Build the application
 RUN cargo build --release
 
 # Runtime stage
