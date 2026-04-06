@@ -40,6 +40,11 @@ regex = "1.10"
 lazy_static = "1.4"
 urlencoding = "2.1"
 
+# Search - Tantivy (disabled temporarily - needs API migration)
+# tantivy = "0.21"
+
+# Try to fix the compilation issue with zeroize
+tokio-util = "0.7"
 
 
 [dev-dependencies]

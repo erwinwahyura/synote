@@ -19,19 +19,45 @@ A self-hosted personal note-taking application inspired by Obsidian and Notion, 
 - ✅ Auto-save (2 seconds after last edit)
 - ✅ Keyboard shortcuts (Cmd+S to save, Cmd+K to search)
 
+### Linking & Organization
+- ✅ **Bidirectional linking** (`[[Note]]` syntax) - Click to navigate, create missing notes
+- ✅ **Tags and filtering** - Sidebar tag list, click to filter notes by tag
+- ✅ **Graph view** - Visualize note connections via wikilinks
+- ✅ **Tag-based graph connections** - Notes sharing the same tag are connected (green dashed lines)
+- ✅ **Backlinks panel** - See all notes linking to current note
+
 ### Production Ready
 - ✅ Docker deployment with health checks
 - ✅ Automatic HTTPS with Let's Encrypt (Caddy)
 - ✅ Security headers & CSP
 - ✅ Authentication support
 - ✅ Automated backups
+- ✅ **Persistent volume storage** - Data saved on Hetzner persistent volume
+
+### In Progress
+- 🔄 **Advanced search with Tantivy** - Backend module ready, needs API integration
+- 🔄 **Folder organization** - Backend structure ready, needs UI implementation
 
 ### Coming Soon
-- 🔲 Bidirectional linking (`[[Note]]` syntax)
-- 🔲 Tags and filtering
-- 🔲 Graph view of note connections
-- 🔲 Advanced search with Tantivy
-- 🔲 Folder organization
+- 🔲 Real-time sync across devices (git-based or CRDT)
+- 🔲 Mobile-optimized UI
+- 🔲 Plugin/extension system
+
+## Data Storage
+
+Your notes are stored as **plain markdown files** on a **persistent Hetzner volume**:
+
+| Location | Path | Purpose |
+|----------|------|---------|
+| **Production data** | `/mnt/apps-data/synote/` | Live notes storage |
+| **Daily backups** | `/mnt/apps-data/synote-backups/` | Automated backups |
+| **Live URL** | `https://research.erwarx.com` | Production instance |
+
+**Benefits:**
+- ✅ Human-readable `.md` files (not locked in database)
+- ✅ Easy backup/restore (just copy files)
+- ✅ Git-compatible for version control
+- ✅ Portable across systems
 
 ## Quick Start
 
@@ -110,7 +136,7 @@ docker-compose up --build
 | 🛡️ Security Headers | CSP, HSTS, X-Frame-Options, etc. |
 | ♻️ Auto-restart | Container restarts on crash |
 | 🏥 Health Checks | Automatic monitoring & recovery |
-| 💾 Daily Backups | Automated note backups to `./backups/` |
+| 💾 Daily Backups | Automated note backups to persistent volume |
 | 🚀 Gzip Compression | Faster content delivery |
 
 #### Environment Variables
@@ -120,17 +146,17 @@ docker-compose up --build
 | `SYNOTE_AUTH_TOKEN` | API authentication token | `changeme` |
 | `RUST_LOG` | Logging level (error/warn/info/debug) | `info` |
 
-### Option 2: Manual Deployment
+### Option 2: Hetzner Deployment (Current Setup)
 
-Build the release binary:
-```bash
-cd backend
-cargo build --release
-```
+**Server:** `46.224.127.221` (hetzner-cx23)
+**Data Volume:** `/mnt/apps-data/synote/` (persistent)
+**Caddy:** Reverse proxy with automatic HTTPS
 
-Run with custom config:
 ```bash
-./target/release/synote
+# On Hetzner server
+cd /home/deploy/synote
+docker compose pull
+docker compose up -d
 ```
 
 ## Project Structure
@@ -139,12 +165,14 @@ Run with custom config:
 synote/
 ├── backend/          # Rust backend (Axum web server)
 │   ├── src/
-│   │   ├── api/      # REST API endpoints
+│   │   ├── api/      # REST API endpoints (notes, tags, links, graph)
 │   │   ├── models/   # Data models
 │   │   ├── storage/  # File system operations
+│   │   ├── links/    # Wikilink parsing and index
+│   │   ├── tags/     # Tag extraction and index
 │   │   └── main.rs
 │   └── Cargo.toml
-├── frontend/         # Web frontend
+├── frontend/         # Web frontend (vanilla JS + D3.js for graph)
 │   └── public/
 │       └── index.html
 ├── docker/           # Docker configurations
@@ -152,7 +180,7 @@ synote/
 │   ├── docker-compose.prod.yml
 │   └── Caddyfile
 ├── data/
-│   └── notes/        # Your notes are stored here
+│   └── notes/        # Your notes are stored here (markdown files)
 └── config.toml       # Configuration file
 ```
 
@@ -183,12 +211,41 @@ token = "your-secure-token-here"  # Set via SYNOTE_AUTH_TOKEN env var
 | PUT | `/api/notes/:id` | Update a note |
 | DELETE | `/api/notes/:id` | Delete a note |
 | GET | `/api/search?q=query` | Search notes |
+| GET | `/api/tags` | List all tags with counts |
+| GET | `/api/tags/:tag/notes` | Get notes with specific tag |
+| GET | `/api/notes/:id/tags` | Get tags for a note |
+| GET | `/api/notes/:id/links` | Get wikilinks for a note |
+| GET | `/api/graph?include_tags=true` | Get graph data (nodes + edges) |
 
 ### Authentication
 When auth is enabled, include the token in the `Authorization` header:
 ```
 Authorization: Bearer your-token-here
 ```
+
+## Using the App
+
+### Creating Notes
+1. Click **"New Note"** button
+2. Add title and content
+3. Auto-saves after 2 seconds of inactivity
+
+### Adding Tags
+Type `#tagname` anywhere in note content. Tags appear in sidebar.
+
+### Creating Links
+Type `[[Note Title]]` to link to another note. Creates bidirectional connection.
+- If note doesn't exist, click to create it
+- Graph view shows all connections
+
+### Viewing Graph
+Click **🕸️ Graph** button to see:
+- **Solid lines**: Wikilink connections
+- **Green dashed lines**: Tag-based connections (notes sharing same tag)
+- Click any node to open that note
+
+### Filtering by Tag
+Click any tag in the sidebar to show only notes with that tag.
 
 ## Development
 
@@ -210,19 +267,23 @@ cargo test
 
 ## Backup & Restore
 
+### Automated Backup (Production)
+Your notes are automatically backed up daily to `/mnt/apps-data/synote-backups/`.
+
 ### Manual Backup
-Your notes are plain markdown files. Simply copy the `data/notes` directory:
+Your notes are plain markdown files. Simply copy the data directory:
 ```bash
-cp -r data/notes /path/to/backup
+# From Hetzner server
+sudo cp -r /mnt/apps-data/synote /path/to/backup
+
+# Or download via scp
+scp -r deploy@46.224.127.221:/mnt/apps-data/synote ./backup
 ```
 
-### Automated Backup (Production)
-The production Docker setup includes automatic daily backups to `./backups/`.
-
 ### Restore
-1. Stop the server: `docker-compose down`
-2. Copy your backup to `data/notes/`
-3. Start the server: `docker-compose up -d`
+1. Stop the server: `docker compose down`
+2. Copy your backup to `/mnt/apps-data/synote/`
+3. Start the server: `docker compose up -d`
 
 ## Security Considerations
 
@@ -246,3 +307,4 @@ Found a bug or have a feature request? Open an issue on GitHub!
 - Inspired by [Obsidian](https://obsidian.md) and [Notion](https://notion.so)
 - Markdown rendering by [marked](https://marked.js.org)
 - Syntax highlighting by [highlight.js](https://highlightjs.org)
+- Graph visualization by [D3.js](https://d3js.org)

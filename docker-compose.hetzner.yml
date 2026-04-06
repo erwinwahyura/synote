@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  synote:
+    image: docker-synote:latest
+    container_name: synote-backend
+    restart: unless-stopped
+    environment:
+      - RUST_LOG=info
+      - SYNOTE_AUTH_TOKEN=4577e6051d67d0157759b42985def9090e964d3d6d58e295ffa9732b3579aa37
+    volumes:
+      - /mnt/apps-data/synote:/app/data/notes
+    ports:
+      - "127.0.0.1:8089:8080"
+    networks:
+      - synote-network
+
+  backup:
+    image: offen/docker-volume-backup:latest
+    container_name: synote-backup
+    restart: unless-stopped
+    environment:
+      - BACKUP_CRON_EXPRESSION=0 2 * * *
+      - BACKUP_RETENTION_DAYS=30
+    volumes:
+      - /mnt/apps-data/synote:/backup/data:ro
+      - /mnt/apps-data/synote-backups:/archive
+
+networks:
+  synote-network:
+    driver: bridge
