@@ -1,9 +1,10 @@
+Warning: Permanently added '46.224.127.221' (ED25519) to the list of known hosts.
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Synote - Personal Notes</title>
+    <title>Synote Read-Only - Personal Notes</title>
 
     <!-- Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
@@ -453,7 +454,7 @@
         .graph-node text {
             font-size: 12px;
             fill: #333;
-            pointer-events: none;
+            pointer-events: auto;
             text-shadow: 0 1px 3px rgba(255,255,255,0.8);
         }
 
@@ -461,11 +462,6 @@
             stroke: #adb5bd;
             stroke-width: 1.5px;
             opacity: 0.6;
-        }
-
-        .graph-link.tag-link {
-            stroke: #28a745;  /* Green for tag connections */
-            stroke-dasharray: 5,5;  /* Dashed line */
         }
 
         .empty-state {
@@ -504,86 +500,6 @@
         .tag:hover {
             background: #007bff;
             color: white;
-        }
-
-        /* Tags section in sidebar */
-        .tags-section {
-            border-top: 2px solid #e0e0e0;
-            background: #f8f9fa;
-            max-height: 250px;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .tags-header {
-            padding: 12px 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: #666;
-            border-bottom: 1px solid #e0e0e0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: white;
-        }
-
-        .tags-count {
-            background: #e9ecef;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-            color: #666;
-            text-transform: none;
-        }
-
-        .tags-list {
-            overflow-y: auto;
-            padding: 10px;
-            flex: 1;
-        }
-
-        .tag-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 6px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background 0.2s;
-            font-size: 13px;
-            margin-bottom: 2px;
-        }
-
-        .tag-item:hover {
-            background: #e9ecef;
-        }
-
-        .tag-item.active {
-            background: #007bff;
-            color: white;
-        }
-
-        .tag-item.active .tag-count {
-            background: rgba(255,255,255,0.2);
-            color: white;
-        }
-
-        .tag-name {
-            color: #007bff;
-            font-weight: 500;
-        }
-
-        .tag-item.active .tag-name {
-            color: white;
-        }
-
-        .tag-count {
-            background: #e9ecef;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-            color: #666;
         }
 
         /* Editor with sidebar layout */
@@ -705,26 +621,17 @@
         <div class="sidebar-header">
             <h1>Synote</h1>
             <div class="sidebar-actions">
-                <button class="new-note-btn" onclick="createNewNote()">+ New Note</button>
-                <button class="graph-btn" onclick="showGraphView()">🕸️ Graph</button>
+                <!-- READ-ONLY: button class="new-note-btn" onclick="createNewNote()">+ New Note</button -->
+                <button class="graph-btn" onclick="showGraphView()">🕸️ Graph</button
             </div>
         </div>
         <div class="search-box">
             <input type="text" class="search-input" id="searchInput"
                    placeholder="Search notes... (Ctrl+K)" oninput="handleSearch()">
-            <button class="search-clear" id="searchClear" onclick="clearSearch()">&times;</button>
+            <!-- READ-ONLY: button class="search-clear" id="searchClear" onclick="clearSearch()">&times;</button -->
         </div>
         <div class="search-results-info" id="searchInfo" style="display: none;"></div>
         <div class="notes-list" id="notesList"></div>
-        
-        <!-- All Tags Section -->
-        <div class="tags-section" id="tagsSection">
-            <div class="tags-header">
-                <span>🏷️ Tags</span>
-                <span class="tags-count" id="tagsCount"></span>
-            </div>
-            <div class="tags-list" id="tagsList"></div>
-        </div>
     </div>
 
     <div class="editor-container" id="editorContainer">
@@ -784,8 +691,8 @@
                         <p style="margin-bottom: 20px; color: #666; font-size: 14px;">Please enter your Synote access token to continue.</p>
                         <input type="password" id="tokenInput" placeholder="Enter token..." style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px;">
                         <div style="display: flex; gap: 10px;">
-                            <button onclick="submitToken()" style="flex: 1; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Login</button>
-                            <button onclick="closeLoginModal()" style="flex: 1; padding: 12px; background: #e0e0e0; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button>
+                            <!-- READ-ONLY: button onclick="submitToken()" style="flex: 1; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Login</button -->
+                            <!-- READ-ONLY: button onclick="closeLoginModal()" style="flex: 1; padding: 12px; background: #e0e0e0; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button -->
                         </div>
                         <p id="loginError" style="margin-top: 15px; color: #dc3545; font-size: 14px; display: none;"></p>
                     </div>
@@ -856,75 +763,18 @@
         async function loadNotes() {
             try {
                 const response = await apiCall('/notes');
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) {
+                        showLoginModal();
+                        return;
+                    }
+                    throw new Error('Failed to load notes: ' + response.status);
+                }
                 notes = await response.json();
                 renderNotesList();
             } catch (error) {
                 console.error('Failed to load notes:', error);
-            }
-        }
-
-        // Load and display all tags in sidebar
-        async function loadTags() {
-            try {
-                const response = await apiCall('/tags');
-                const data = await response.json();
-                renderTagsList(data.tags || []);
-            } catch (error) {
-                console.error('Failed to load tags:', error);
-                renderTagsList([]);
-            }
-        }
-
-        // Render tags in sidebar
-        function renderTagsList(tags) {
-            const tagsList = document.getElementById('tagsList');
-            const tagsCount = document.getElementById('tagsCount');
-            
-            // Update count
-            if (tagsCount) {
-                tagsCount.textContent = tags.length > 0 ? `${tags.length} total` : '';
-            }
-            
-            if (tags.length === 0) {
-                tagsList.innerHTML = '<div style="padding: 15px; text-align: center; color: #999; font-size: 13px;">No tags found</div>';
-                return;
-            }
-            
-            tagsList.innerHTML = tags.map(tag => `
-                <div class="tag-item" onclick="filterByTag('${tag.name.replace(/'/g, "\\'")}')">
-                    <span class="tag-name">#${escapeHtml(tag.name)}</span>
-                    <span class="tag-count">${tag.count}</span>
-                </div>
-            `).join('');
-        }
-
-        // Filter notes by tag
-        async function filterByTag(tagName) {
-            try {
-                const response = await apiCall(`/tags/${encodeURIComponent(tagName)}/notes`);
-                const data = await response.json();
-                
-                // Update notes list to show tagged notes
-                notes = data.notes.map(n => ({ id: n.id, title: n.title }));
-                isSearching = true;
-                renderNotesList();
-                
-                // Update search info
-                const searchInfo = document.getElementById('searchInfo');
-                if (searchInfo) {
-                    searchInfo.style.display = 'block';
-                    searchInfo.textContent = `Tag: #${tagName} (${data.notes.length} notes)`;
-                }
-                
-                // Highlight active tag
-                document.querySelectorAll('.tag-item').forEach(item => {
-                    item.classList.remove('active');
-                    if (item.textContent.includes('#' + tagName)) {
-                        item.classList.add('active');
-                    }
-                });
-            } catch (error) {
-                console.error('Failed to filter by tag:', error);
+                showLoginModal();
             }
         }
 
@@ -938,8 +788,7 @@
             }
 
             notesList.innerHTML = notes.map(note => `
-                <div class="note-item ${currentNote?.id === note.id ? 'active' : ''}"
-                     onclick="loadNote('${note.id}')">
+                <div class="note-item ${currentNote?.id === note.id ? 'active' : ''}" onclick="loadNote('${note.id}')">
                     <div class="note-item-title">${note.title || 'Untitled'}</div>
                     <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
                 </div>
@@ -994,7 +843,7 @@
 
         async function performSearch(query) {
             try {
-                const response = await apiCall(`/search?q=${encodeURIComponent(query)}`);
+                const response = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`);
                 notes = await response.json();
                 renderNotesList();
             } catch (error) {
@@ -1003,14 +852,47 @@
             }
         }
 
+                // Update backlinks display
+        async function updateBacklinks(content) {
+            const backlinksDisplay = document.getElementById('backlinksDisplay');
+            if (!backlinksDisplay) return;
+            
+            // Extract wikilinks from content
+            const wikilinkRegex = /\[\[([^\]]+)\]\]/g;
+            const links = [];
+            let match;
+            while ((match = wikilinkRegex.exec(content)) !== null) {
+                links.push(match[1]);
+            }
+            
+            if (links.length === 0) {
+                backlinksDisplay.innerHTML = '';
+                return;
+            }
+            
+            backlinksDisplay.innerHTML = '<div style="color: #666; font-size: 12px; margin-bottom: 5px;">Links to:</div>' + 
+                links.map(link => `<div class="backlink-tag">${escapeHtml(link)}</div>`).join('');
+        }
+
         async function loadNote(id) {
+            console.log('Loading note:', id);
             try {
                 const response = await apiCall(`/notes/${id}`);
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) {
+                        showLoginModal();
+                        return;
+                    }
+                    throw new Error('Failed to load note: ' + response.status);
+                }
                 currentNote = await response.json();
+                currentNoteId = currentNote.id;
                 renderEditor();
                 renderNotesList();
+                updateBacklinks(currentNote.content || '');
             } catch (error) {
                 console.error('Failed to load note:', error);
+                alert('Failed to load note: ' + error.message);
             }
         }
 
@@ -1019,8 +901,8 @@
             container.innerHTML = `
                 <div class="editor-header">
                     <div class="editor-actions">
-                        <button class="btn" onclick="saveNote()">Save</button>
-                        <button class="btn btn-danger" onclick="deleteNote()">Delete</button>
+                        <!-- READ-ONLY: button class="btn" onclick="saveNote()">Save</button -->
+                        <!-- READ-ONLY: button class="btn btn-danger" onclick="deleteNote()">Delete</button -->
                     </div>
                 </div>
                 <div class="editor-content">
@@ -1267,6 +1149,19 @@
             ).join(' ');
         }
 
+        async function filterByTag(tag) {
+            isSearching = true;
+            try {
+                const response = await apiCall(`/tags/${encodeURIComponent(tag)}/notes`);
+                notes = await response.json();
+                renderNotesList();
+                showNotification(`Showing notes with #${tag}`, 'info');
+            } catch (error) {
+                console.error('Failed to filter by tag:', error);
+                showNotification('Failed to filter', 'error');
+            }
+        }
+
         function scheduleAutoSave() {
             if (autoSaveTimeout) {
                 clearTimeout(autoSaveTimeout);
@@ -1278,8 +1173,9 @@
 
         async function createNewNote() {
             try {
-                const response = await apiCall('/notes', {
+                const response = await fetch(`${API_URL}/notes`, {
                     method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         title: 'Untitled Note',
                         content: ''
@@ -1287,7 +1183,6 @@
                 });
                 currentNote = await response.json();
                 await loadNotes();
-                await loadTags(); // Refresh tags list
                 renderEditor();
             } catch (error) {
                 console.error('Failed to create note:', error);
@@ -1301,13 +1196,13 @@
             const content = document.getElementById('noteContent')?.value || currentNote.content;
 
             try {
-                const response = await apiCall(`/notes/${currentNote.id}`, {
+                const response = await fetch(`${API_URL}/notes/${currentNote.id}`, {
                     method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, content })
                 });
                 currentNote = await response.json();
                 await loadNotes();
-                await loadTags(); // Refresh tags list
 
                 if (!silent) {
                     showNotification('Note saved!', 'success');
@@ -1354,7 +1249,7 @@
             if (!confirm('Are you sure you want to delete this note?')) return;
 
             try {
-                await apiCall(`/notes/${currentNote.id}`, {
+                await fetch(`${API_URL}/notes/${currentNote.id}`, {
                     method: 'DELETE'
                 });
                 currentNote = null;
@@ -1371,9 +1266,8 @@
             }
         }
 
-        // Load notes and tags on page load
+        // Load notes on page load
         loadNotes();
-        loadTags();
 
         // Keyboard shortcuts
         document.addEventListener('keydown', function(e) {
@@ -1406,7 +1300,7 @@
                 <div class="graph-container">
                     <div class="graph-header">
                         <h2>🕸️ Note Graph</h2>
-                        <button class="btn" onclick="closeGraphView()">Close</button>
+                        <!-- READ-ONLY: button class="btn" onclick="closeGraphView()">Close</button -->
                     </div>
                     <svg class="graph-canvas" id="graphCanvas"></svg>
                 </div>
@@ -1427,13 +1321,13 @@
 
         async function loadAndRenderGraph() {
             try {
-                const response = await apiCall('/graph?include_tags=true');
+                const response = await apiCall('/graph');
                 if (!response.ok) {
                     showNotification('Failed to load graph data', 'error');
                     return;
                 }
                 
-                const data = await response.json();
+                let data; try { data = await response.json(); } catch (e) { data = { error: "Unauthorized", message: "Please login" }; }
                 if (data.nodes.length === 0) {
                     document.getElementById('graphCanvas').innerHTML = `
                         <text x="50%" y="50%" text-anchor="middle" fill="#666" font-size="14">
@@ -1484,7 +1378,7 @@
                 .selectAll('line')
                 .data(data.edges)
                 .enter().append('line')
-                .attr('class', d => d.type && d.type.startsWith('tag:') ? 'graph-link tag-link' : 'graph-link');
+                .attr('class', 'graph-link');
             
             // Nodes
             const node = g.append('g')
