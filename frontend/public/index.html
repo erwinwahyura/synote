@@ -1006,12 +1006,126 @@
             .note-pane { border: none !important; min-width: 100% !important; max-width: 100% !important; display: block !important; }
             .pane-body { padding: 0 !important; overflow: visible !important; height: auto !important; }
         }
+
+        /* ── Mobile: drawer overlay ─────────────────────────────── */
+        .sidebar-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 150;
+        }
+
+        .sidebar-overlay.open { display: block; }
+
+        .hamburger-btn {
+            display: none;
+            width: 36px; height: 36px;
+            align-items: center; justify-content: center;
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            background: var(--content-secondary);
+            cursor: pointer; font-size: 16px; color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        /* ── Mobile bottom bar ──────────────────────────────────── */
+        .mobile-bottom-bar {
+            display: none;
+            position: fixed; bottom: 0; left: 0; right: 0;
+            height: 52px;
+            background: var(--content-bg);
+            border-top: 1px solid var(--border);
+            padding: 0 12px;
+            align-items: center; justify-content: space-between;
+            z-index: 100;
+            gap: 8px;
+        }
+
+        .mobile-bottom-bar .btn-icon { width: 36px; height: 36px; font-size: 16px; }
+
+        .mobile-bar-title {
+            flex: 1;
+            font-size: 13px; font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            text-align: center;
+        }
+
+        /* ── Tablet: max 2 panes ────────────────────────────────── */
+        @media (max-width: 1024px) and (min-width: 769px) {
+            :root { --sidebar-width: 220px; }
+
+            .note-pane:nth-child(n+4) { display: none !important; }
+            .pane-resize-handle:nth-child(n+4) { display: none !important; }
+        }
+
+        /* ── Mobile: single pane, drawer sidebar ────────────────── */
+        @media (max-width: 768px) {
+            body { font-size: 15px; }
+
+            .sidebar {
+                position: fixed; top: 0; left: 0; bottom: 0;
+                width: 85vw; max-width: 320px;
+                z-index: 200;
+                transform: translateX(-100%);
+                transition: transform 0.24s ease;
+            }
+
+            .sidebar.open { transform: translateX(0); }
+
+            #sidebarResizeHandle { display: none !important; }
+
+            /* Show hamburger in pane topbar area */
+            .hamburger-btn { display: flex; }
+
+            /* Force single pane */
+            .note-pane:not(:first-child) { display: none !important; }
+            .pane-resize-handle { display: none !important; }
+
+            /* Simpler pane topbar on mobile */
+            .pane-topbar {
+                padding: 8px 12px;
+                gap: 6px;
+            }
+
+            .pane-topbar-actions > .export-wrap,
+            .pane-topbar-actions > span,
+            .pane-topbar-actions > .minimize-btn { display: none !important; }
+
+            /* Hide pane close btn — use bottom bar instead */
+            .pane-topbar-actions > .btn-icon:last-child { display: none !important; }
+
+            /* Body padding accounts for bottom bar */
+            .pane-body { padding: 20px 18px 80px; }
+            .pane-footer { padding: 6px 18px; }
+
+            /* Show bottom bar */
+            .mobile-bottom-bar { display: flex; }
+
+            /* TOC more compact */
+            .pane-toc { padding: 8px 10px; }
+
+            /* Wider note title */
+            .pane-note-title { font-size: 22px; }
+
+            /* Command palette full width */
+            .cmd-palette { width: 94vw; }
+
+            /* Modal full screen */
+            .modal-editor { width: 100vw; height: 100vh; border-radius: 0; }
+
+            /* Zen mode: no change on mobile */
+            body.zen .sidebar { transform: translateX(-100%) !important; }
+        }
+
     </style>
 </head>
 <body>
 
+<!-- ── Sidebar overlay (mobile) ───────────────────────────── -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
 <!-- ── Sidebar ─────────────────────────────────────────────── -->
-<div class="sidebar">
+<div class="sidebar" id="sidebar">
     <div class="sidebar-header">
         <div class="sidebar-top">
             <h1>Synote</h1>
@@ -1051,6 +1165,15 @@
     </div>
 </div>
 
+<!-- ── Mobile bottom bar ──────────────────────────────────── -->
+<div class="mobile-bottom-bar" id="mobileBottomBar">
+    <button class="btn-icon" id="mobileBackBtn"  onclick="mobileGoBack()"    title="Back">←</button>
+    <button class="btn-icon" id="mobileFwdBtn"   onclick="mobileGoForward()" title="Forward">→</button>
+    <span class="mobile-bar-title" id="mobileBarTitle"></span>
+    <button class="btn-icon" onclick="openMobileEdit()"  title="Edit">✏</button>
+    <button class="btn-icon" onclick="mobileClosePane()" title="Close">✕</button>
+</div>
+
 <!-- ── Wikilink hover preview (singleton) ─────────────────── -->
 <div class="wikilink-preview" id="wikilinkPreview">
     <div class="wp-title" id="wpTitle"></div>
@@ -1086,7 +1209,22 @@ function init() {
     applyDarkMode();
     document.getElementById('sortSelect').value = sortOrder;
     initSidebarResize();
+    initSwipeGesture();
     loadNotes();
+}
+
+function initSwipeGesture() {
+    let touchStartX = 0;
+    document.addEventListener('touchstart', e => {
+        touchStartX = e.touches[0].clientX;
+    }, { passive: true });
+    document.addEventListener('touchend', e => {
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        // Swipe right from left edge → open sidebar
+        if (touchStartX < 24 && dx > 60) openMobileSidebar();
+        // Swipe left on open sidebar → close
+        if (dx < -60 && document.getElementById('sidebar')?.classList.contains('open')) closeMobileSidebar();
+    }, { passive: true });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -1325,6 +1463,7 @@ async function loadNote(id) {
 
         renderPanes();
         renderNotesList();
+        closeMobileSidebar();
     } catch { showNotification('Failed to load note', 'error'); }
 }
 
@@ -1429,6 +1568,7 @@ function renderPanes() {
     container.innerHTML = openPanes.map(pane => buildPaneShell(pane)).join('');
     openPanes.forEach(pane => populatePaneBody(pane));
     addPaneResizeHandles();
+    updateMobileBottomBar();
 }
 
 function buildPaneShell(pane) {
@@ -1442,6 +1582,7 @@ function buildPaneShell(pane) {
     return `
     <div class="note-pane ${minimized ? 'minimized' : ''}" id="pane-${uid}">
         <div class="pane-topbar">
+            <button class="hamburger-btn" onclick="openMobileSidebar()" title="Open notes">☰</button>
             <button class="pane-nav-btn" onclick="goBack('${uid}')" ${canBack ? '' : 'disabled'} title="Go back">←</button>
             <button class="pane-nav-btn" onclick="goForward('${uid}')" ${canFwd ? '' : 'disabled'} title="Go forward">→</button>
             <span class="pane-title-label" title="${escapeHtml(note.title)}" ondblclick="startRenameInPane('${uid}')">${escapeHtml(note.title)}</span>
@@ -1472,6 +1613,7 @@ function renderPaneContent(pane) {
     if (!el) return;
     el.outerHTML = buildPaneShell(pane);
     populatePaneBody(pane);
+    updateMobileBottomBar();
 }
 
 function populatePaneBody(pane) {
@@ -2281,6 +2423,58 @@ function initSidebarResize() {
         () => document.getElementById('panesContainer'),
         180, 320
     );
+}
+
+// ════════════════════════════════════════════════════════════
+// Mobile sidebar drawer
+// ════════════════════════════════════════════════════════════
+function openMobileSidebar() {
+    document.getElementById('sidebar')?.classList.add('open');
+    document.getElementById('sidebarOverlay')?.classList.add('open');
+}
+
+function closeMobileSidebar() {
+    document.getElementById('sidebar')?.classList.remove('open');
+    document.getElementById('sidebarOverlay')?.classList.remove('open');
+}
+
+// Close drawer when a note is selected on mobile
+const _origLoadNote = loadNote;
+// (patched below after loadNote defined — see mobileLoadNote wrapper)
+
+function updateMobileBottomBar() {
+    const bar = document.getElementById('mobileBottomBar');
+    if (!bar) return;
+    const pane = openPanes[0]; // mobile only shows first pane
+    if (!pane) {
+        document.getElementById('mobileBarTitle').textContent = '';
+        document.getElementById('mobileBackBtn').disabled = true;
+        document.getElementById('mobileFwdBtn').disabled  = true;
+        return;
+    }
+    document.getElementById('mobileBarTitle').textContent = pane.note.title;
+    document.getElementById('mobileBackBtn').disabled = pane.historyIdx <= 0;
+    document.getElementById('mobileFwdBtn').disabled  = pane.historyIdx >= pane.history.length - 1;
+}
+
+function mobileGoBack() {
+    const pane = openPanes[0];
+    if (pane) goBack(pane.uid);
+}
+
+function mobileGoForward() {
+    const pane = openPanes[0];
+    if (pane) goForward(pane.uid);
+}
+
+function mobileClosePane() {
+    const pane = openPanes[0];
+    if (pane) closePane(pane.uid);
+}
+
+function openMobileEdit() {
+    const pane = openPanes[0];
+    if (pane) openEditorModal(pane.uid);
 }
 
 // ════════════════════════════════════════════════════════════
