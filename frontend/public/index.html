@@ -816,16 +816,37 @@
             border: 1px solid var(--border);
             border-radius: var(--radius-md);
             box-shadow: var(--shadow-lg);
-            padding: 12px 15px;
-            max-width: 300px; min-width: 200px;
+            padding: 14px 16px;
+            max-width: 340px; min-width: 220px;
+            max-height: 280px; overflow: hidden;
             pointer-events: none;
             opacity: 0; transition: opacity 0.15s;
         }
 
         .wikilink-preview.visible { opacity: 1; }
 
-        .wp-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 5px; }
-        .wp-excerpt { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+        .wp-title { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border-light); }
+        .wp-body { font-size: 12px; color: var(--text-secondary); line-height: 1.55; overflow: hidden; max-height: 200px; }
+        .wp-body h1,.wp-body h2,.wp-body h3 { font-size: 12px; font-weight: 600; margin: 4px 0 2px; color: var(--text-primary); }
+        .wp-body p { margin-bottom: 4px; }
+        .wp-body code { font-size: 10.5px; }
+        .wp-body pre { padding: 6px 8px; font-size: 10.5px; border-radius: 4px; }
+        .wp-body ul, .wp-body ol { padding-left: 14px; margin-bottom: 4px; }
+
+        /* ── Note lock ───────────────────────────────────────────── */
+        .lock-btn { font-size: 13px; }
+        .note-pane.locked .pane-body { cursor: default; }
+        .locked-banner {
+            padding: 4px 12px; background: rgba(245,166,35,0.12);
+            border-bottom: 1px solid rgba(245,166,35,0.3);
+            font-size: 11.5px; color: #f5a623; text-align: center; flex-shrink: 0;
+        }
+
+        /* ── Focus timer ─────────────────────────────────────────── */
+        .focus-timer {
+            font-size: 11px; color: var(--text-muted);
+            font-family: var(--font-mono); letter-spacing: 0.5px;
+        }
 
         /* ── Graph ──────────────────────────────────────────────── */
         .graph-container { flex: 1; display: flex; flex-direction: column; background: var(--content-bg); overflow: hidden; }
@@ -1432,7 +1453,7 @@
 <!-- ── Wikilink hover preview (singleton) ─────────────────── -->
 <div class="wikilink-preview" id="wikilinkPreview">
     <div class="wp-title" id="wpTitle"></div>
-    <div class="wp-excerpt" id="wpExcerpt"></div>
+    <div class="wp-body preview-content" id="wpBody"></div>
 </div>
 
 <script>
@@ -1453,7 +1474,9 @@ let sortOrder    = localStorage.getItem('synote_sort') || 'updated';
 let darkMode     = localStorage.getItem('synote_dark') === 'true';
 let recentlyViewed = JSON.parse(localStorage.getItem('synote_recent') || '[]'); // [{id,title}]
 let starredNotes = new Set(JSON.parse(localStorage.getItem('synote_starred') || '[]'));
+let lockedNotes  = new Set(JSON.parse(localStorage.getItem('synote_locked') || '[]'));
 let zenMode = false;
+const focusTimers = {}; // uid → { startTs, elapsed, intervalId }
 const noteCache  = new Map(); // noteId -> full note object
 const MAX_PANES  = 5;
 
@@ -1788,6 +1811,7 @@ async function goForward(paneUid) {
 function closePane(paneUid) {
     const idx = openPanes.findIndex(p => p.uid === paneUid);
     if (idx === -1) return;
+    stopFocusTimer(paneUid);
     openPanes.splice(idx, 1);
     currentNote = openPanes[openPanes.length - 1]?.note || null;
     renderPanes();
@@ -1836,8 +1860,9 @@ function buildPaneShell(pane) {
     const minIcon  = minimized ? '⊡' : '⊟';
     const minTitle = minimized ? 'Restore pane' : 'Minimize pane';
     const isStarred = starredNotes.has(note.id);
+    const isLocked  = lockedNotes.has(note.id);
     return `
-    <div class="note-pane ${minimized ? 'minimized' : ''}" id="pane-${uid}">
+    <div class="note-pane ${minimized ? 'minimized' : ''} ${isLocked ? 'locked' : ''}" id="pane-${uid}">
         <div class="pane-topbar">
             <button class="hamburger-btn" onclick="openMobileSidebar()" title="Open notes">☰</button>
             <button class="pane-nav-btn" onclick="goBack('${uid}')" ${canBack ? '' : 'disabled'} title="Go back">←</button>
@@ -1846,8 +1871,9 @@ function buildPaneShell(pane) {
             <div class="pane-topbar-actions">
                 <span style="font-size:11px;color:var(--text-muted);">${updated}</span>
                 <button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${note.id}',event)" title="${isStarred ? 'Unstar' : 'Star note'}">${isStarred ? '⭐' : '☆'}</button>
+                <button class="btn-icon lock-btn" onclick="toggleLockNote('${note.id}')" title="${isLocked ? 'Unlock note' : 'Lock note'}">${isLocked ? '🔒' : '🔓'}</button>
                 <button class="btn-icon" onclick="toggleFindBar('${uid}')" title="Find in note (⌘F)">🔍</button>
-                <button class="btn btn-primary" style="font-size:11.5px;padding:3px 9px;" onclick="openEditorModal('${uid}')">Edit</button>
+                <button class="btn btn-primary" style="font-size:11.5px;padding:3px 9px;${isLocked ? 'opacity:0.4;pointer-events:none;' : ''}" onclick="openEditorModal('${uid}')">Edit</button>
                 <div style="position:relative;" id="delete-wrap-${uid}">
                     <button class="btn-icon" onclick="confirmDeleteNote('${uid}')" title="Delete note" style="color:var(--danger);">🗑</button>
                 </div>
@@ -1898,11 +1924,22 @@ function populatePaneBody(pane) {
             <div id="backlinks-${uid}"><div style="font-size:12.5px;color:var(--text-muted);">Loading…</div></div>
         </div>`;
 
-    // Word count footer sits outside scrollable body
+    // Locked banner
+    if (lockedNotes.has(note.id)) {
+        const banner = document.createElement('div');
+        banner.className = 'locked-banner';
+        banner.textContent = '🔒 Read-only — unlock to edit';
+        body.before(banner);
+    }
+
+    // Word count footer + focus timer
     const footer = document.createElement('div');
     footer.className = 'pane-footer';
-    footer.innerHTML = `<span>${wc.toLocaleString()} words</span><span>·</span><span>${readMin} min read</span>`;
+    footer.innerHTML = `<span>${wc.toLocaleString()} words</span><span>·</span><span>${readMin} min read</span><span>·</span><span class="focus-timer" id="timer-${uid}">0:00</span>`;
     body.parentElement.appendChild(footer);
+
+    // Start focus timer for this pane
+    startFocusTimer(uid);
 
     renderMarkdownInto(`preview-${uid}`, note.content, uid);
     updateTagsDisplayFor(`tags-${uid}`, note.content, uid);
@@ -2079,19 +2116,33 @@ let previewTimeout = null;
 
 function showWikilinkPreview(event, title, noteId) {
     clearTimeout(previewTimeout);
-    previewTimeout = setTimeout(() => {
+    previewTimeout = setTimeout(async () => {
         const preview = document.getElementById('wikilinkPreview');
         document.getElementById('wpTitle').textContent = title;
-        const cached = noteCache.get(noteId);
-        if (cached) {
-            const stripped = cached.content.replace(/#{1,6}\s+/g, '').replace(/\[\[|\]\]/g, '').replace(/[*_`]/g, '');
-            document.getElementById('wpExcerpt').textContent = stripped.slice(0, 180) + (stripped.length > 180 ? '…' : '');
+        const body = document.getElementById('wpBody');
+
+        let note = noteCache.get(noteId);
+        if (!note) {
+            body.textContent = 'Loading…';
+            preview.classList.add('visible');
+            positionPreview(preview, event);
+            try {
+                const res = await apiCall(`/notes/${noteId}`);
+                if (res.ok) { note = await res.json(); noteCache.set(note.id, note); }
+            } catch {}
+        }
+
+        if (note) {
+            // Render first ~600 chars of content as markdown
+            const excerpt = note.content.slice(0, 600) + (note.content.length > 600 ? '\n\n…' : '');
+            configureMarked(null);
+            body.innerHTML = marked.parse(excerpt);
         } else {
-            document.getElementById('wpExcerpt').textContent = 'Click to open';
+            body.textContent = 'Click to open';
         }
         positionPreview(preview, event);
         preview.classList.add('visible');
-    }, 350);
+    }, 380);
 }
 
 function moveWikilinkPreview(event) {
@@ -2973,6 +3024,45 @@ function openMobileEdit() {
     const pane = openPanes[0];
     if (pane) openEditorModal(pane.uid);
 }
+
+// ════════════════════════════════════════════════════════════
+// Note locking
+// ════════════════════════════════════════════════════════════
+function toggleLockNote(noteId) {
+    if (lockedNotes.has(noteId)) lockedNotes.delete(noteId);
+    else lockedNotes.add(noteId);
+    localStorage.setItem('synote_locked', JSON.stringify([...lockedNotes]));
+    // Re-render all panes showing this note
+    openPanes.filter(p => p.note.id === noteId).forEach(p => renderPaneContent(p));
+    showNotification(lockedNotes.has(noteId) ? '🔒 Note locked' : '🔓 Note unlocked', 'info');
+}
+
+// ════════════════════════════════════════════════════════════
+// Focus time tracker
+// ════════════════════════════════════════════════════════════
+function startFocusTimer(paneUid) {
+    stopFocusTimer(paneUid);
+    const state = { elapsed: 0, intervalId: null };
+    focusTimers[paneUid] = state;
+    state.intervalId = setInterval(() => {
+        state.elapsed++;
+        const el = document.getElementById(`timer-${paneUid}`);
+        if (!el) { stopFocusTimer(paneUid); return; }
+        const m = Math.floor(state.elapsed / 60);
+        const s = state.elapsed % 60;
+        el.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+    }, 1000);
+}
+
+function stopFocusTimer(paneUid) {
+    if (focusTimers[paneUid]?.intervalId) {
+        clearInterval(focusTimers[paneUid].intervalId);
+        delete focusTimers[paneUid];
+    }
+}
+
+// Stop timers when pane closes
+const _origClosePane = closePane;
 
 // ════════════════════════════════════════════════════════════
 // Stars / pinned notes
