@@ -512,10 +512,25 @@
         .preview-content h2 {
             font-size: 1.3em; font-weight: 600; margin: 0.9em 0 0.4em;
             border-bottom: 1px solid var(--border-light); padding-bottom: 0.2em;
+            cursor: pointer; user-select: none;
+            display: flex; align-items: center; gap: 6px;
         }
-
-        .preview-content h3 { font-size: 1.1em; font-weight: 600; margin: 0.8em 0 0.35em; }
+        .preview-content h3 {
+            font-size: 1.1em; font-weight: 600; margin: 0.8em 0 0.35em;
+            cursor: pointer; user-select: none;
+            display: flex; align-items: center; gap: 6px;
+        }
         .preview-content h4 { font-size: 1em; font-weight: 600; margin: 0.7em 0 0.3em; }
+
+        .heading-fold-arrow {
+            font-size: 10px; color: var(--text-muted);
+            transition: transform 0.15s; flex-shrink: 0; opacity: 0.5;
+        }
+        .preview-content h2:hover .heading-fold-arrow,
+        .preview-content h3:hover .heading-fold-arrow { opacity: 1; }
+        .heading-folded .heading-fold-arrow { transform: rotate(-90deg); }
+
+        .heading-section.folded { display: none; }
         .preview-content p { margin-bottom: 0.85em; }
         .preview-content ul, .preview-content ol { margin-bottom: 0.85em; padding-left: 1.6em; }
         .preview-content li { margin-bottom: 0.2em; }
@@ -539,6 +554,29 @@
             background: var(--accent-light);
             border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
         }
+
+        /* ── Callout blocks ─────────────────────────────────────── */
+        .callout {
+            border-radius: var(--radius-md); padding: 12px 16px;
+            margin: 1em 0; border-left: 4px solid;
+        }
+        .callout-title {
+            font-weight: 600; font-size: 13px; margin-bottom: 5px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .callout-body { font-size: 13.5px; }
+        .callout-body p:last-child { margin-bottom: 0; }
+
+        .callout.note     { background: rgba(109,94,245,0.08); border-color: var(--accent); color: var(--text-primary); }
+        .callout.note .callout-title { color: var(--accent); }
+        .callout.tip      { background: rgba(63,185,80,0.08);  border-color: var(--success); }
+        .callout.tip .callout-title  { color: var(--success); }
+        .callout.warning  { background: rgba(245,166,35,0.1);  border-color: #f5a623; }
+        .callout.warning .callout-title { color: #f5a623; }
+        .callout.important { background: rgba(229,83,75,0.08); border-color: var(--danger); }
+        .callout.important .callout-title { color: var(--danger); }
+        .callout.caution  { background: rgba(229,83,75,0.05);  border-color: #e07b39; }
+        .callout.caution .callout-title  { color: #e07b39; }
 
         .preview-content a { color: var(--accent); text-decoration: none; }
         .preview-content a:hover { text-decoration: underline; }
@@ -1024,6 +1062,31 @@
         }
         .new-note-input::placeholder { color: var(--sidebar-muted); }
 
+        /* ── Template picker ─────────────────────────────────────── */
+        .template-picker {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(6px);
+            z-index: 2000; display: flex; align-items: center; justify-content: center;
+            animation: fadeIn 0.12s ease;
+        }
+        .template-modal {
+            background: var(--content-bg); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+            width: 440px; max-width: 92vw; padding: 22px 24px;
+        }
+        .template-modal h2 { font-size: 14px; font-weight: 700; margin-bottom: 14px; }
+        .template-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+        .template-card {
+            padding: 12px 14px; border: 1px solid var(--border);
+            border-radius: var(--radius-md); cursor: pointer;
+            transition: all 0.12s; text-align: left;
+            background: var(--content-bg);
+        }
+        .template-card:hover { border-color: var(--accent); background: var(--accent-dim); }
+        .template-card-icon { font-size: 20px; margin-bottom: 6px; }
+        .template-card-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+        .template-card-desc { font-size: 11.5px; color: var(--text-muted); margin-top: 2px; }
+
         /* ── Delete confirm inline ───────────────────────────────── */
         .delete-confirm {
             position: absolute; top: calc(100% + 4px); right: 0;
@@ -1191,6 +1254,7 @@
         <input class="new-note-input" id="newNoteInput" placeholder="Note title…"
                onkeydown="handleNewNoteKey(event)">
         <button class="btn btn-primary" style="font-size:12px;padding:4px 10px;" onclick="createNewNote()">Create</button>
+        <button class="btn" style="font-size:12px;padding:4px 8px;" onclick="showTemplatePicker()" title="From template">⊞</button>
         <button class="btn" style="font-size:12px;padding:4px 8px;" onclick="hideNewNoteForm()">✕</button>
     </div>
     <div class="search-box">
@@ -1742,6 +1806,23 @@ function scrollToHeading(paneUid, headingId) {
 // ════════════════════════════════════════════════════════════
 function configureMarked(paneUid) {
     const renderer = new marked.Renderer();
+
+    renderer.blockquote = function(quote) {
+        // Check for callout syntax: > [!TYPE]
+        const match = quote.match(/^\s*<p>\[!(NOTE|TIP|WARNING|IMPORTANT|CAUTION)\](.*?)<\/p>/si);
+        if (match) {
+            const type  = match[1].toLowerCase();
+            const icons = { note:'💡', tip:'✅', warning:'⚠️', important:'🔴', caution:'🔥' };
+            const labels = { note:'Note', tip:'Tip', warning:'Warning', important:'Important', caution:'Caution' };
+            const body  = quote.replace(/^\s*<p>\[!(?:NOTE|TIP|WARNING|IMPORTANT|CAUTION)\].*?<\/p>/si, '').trim();
+            return `<div class="callout ${type}">
+                <div class="callout-title">${icons[type]} ${labels[type]}</div>
+                ${body ? `<div class="callout-body">${body}</div>` : ''}
+            </div>`;
+        }
+        return `<blockquote>${quote}</blockquote>`;
+    };
+
     const headingCounts = {};
     renderer.heading = function(text, level) {
         const key = text.toLowerCase();
@@ -1768,6 +1849,8 @@ function renderMarkdownInto(elementId, content, paneUid) {
     if (!el) return;
     configureMarked(paneUid);
     el.innerHTML = renderWikilinks(marked.parse(content || ''), paneUid);
+    applyCallouts(el);
+    applyFoldableHeadings(el);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2300,6 +2383,27 @@ function renderForceGraph(data) {
     node.append('text').attr('dy',d=>(d.size||8)+14).attr('text-anchor','middle')
         .text(d=>d.title?.length>22?d.title.slice(0,22)+'…':d.title)
         .attr('font-size','11px').attr('fill','rgba(255,255,255,0.7)').attr('font-family','Inter,sans-serif');
+
+    // Hover: highlight connected nodes, fade others
+    node.on('mouseover', (e, d) => {
+        const connected = new Set([d.id]);
+        data.edges.forEach(l => {
+            const src = l.source.id ?? l.source;
+            const tgt = l.target.id ?? l.target;
+            if (src === d.id) connected.add(tgt);
+            if (tgt === d.id) connected.add(src);
+        });
+        node.style('opacity', n => connected.has(n.id) ? 1 : 0.15);
+        link.style('opacity', l => {
+            const src = l.source.id ?? l.source;
+            const tgt = l.target.id ?? l.target;
+            return (src === d.id || tgt === d.id) ? 1 : 0.05;
+        });
+    }).on('mouseout', () => {
+        node.style('opacity', 1);
+        link.style('opacity', 1);
+    });
+
     sim.on('tick',()=>{
         link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
         node.attr('transform',d=>`translate(${d.x},${d.y})`);
@@ -2773,6 +2877,142 @@ function showShortcutsModal() {
         </div>`;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
+}
+
+// ════════════════════════════════════════════════════════════
+// Callouts (post-process rendered HTML)
+// ════════════════════════════════════════════════════════════
+function applyCallouts(el) {
+    // Already handled in the blockquote renderer — nothing extra needed
+}
+
+// ════════════════════════════════════════════════════════════
+// Foldable headings
+// ════════════════════════════════════════════════════════════
+function applyFoldableHeadings(el) {
+    const headings = [...el.querySelectorAll('h2, h3')];
+    headings.forEach(h => {
+        // Add arrow indicator
+        const arrow = document.createElement('span');
+        arrow.className = 'heading-fold-arrow';
+        arrow.textContent = '▾';
+        h.appendChild(arrow);
+
+        // Collect all sibling elements until next same-or-higher heading
+        const level = parseInt(h.tagName[1]);
+        const section = [];
+        let sib = h.nextElementSibling;
+        while (sib) {
+            const sibLevel = sib.tagName?.match(/^H([23])$/)?.[1];
+            if (sibLevel && parseInt(sibLevel) <= level) break;
+            section.push(sib);
+            sib = sib.nextElementSibling;
+        }
+
+        if (!section.length) { arrow.style.display = 'none'; return; }
+
+        // Wrap section siblings in a div
+        const wrapper = document.createElement('div');
+        wrapper.className = 'heading-section';
+        h.after(wrapper);
+        section.forEach(n => wrapper.appendChild(n));
+
+        h.addEventListener('click', () => {
+            const folded = wrapper.classList.toggle('folded');
+            h.classList.toggle('heading-folded', folded);
+        });
+    });
+}
+
+// ════════════════════════════════════════════════════════════
+// Note templates
+// ════════════════════════════════════════════════════════════
+const NOTE_TEMPLATES = [
+    {
+        id: 'blank',
+        icon: '📄',
+        name: 'Blank',
+        desc: 'Empty note',
+        title: '',
+        content: ''
+    },
+    {
+        id: 'daily',
+        icon: '📅',
+        name: 'Daily Note',
+        desc: 'Day planning & log',
+        title: () => new Date().toLocaleDateString('en-CA'), // YYYY-MM-DD
+        content: `## Morning intention\n\n\n\n## Tasks\n\n- [ ] \n- [ ] \n- [ ] \n\n## Notes & thoughts\n\n\n\n## End of day\n\n`
+    },
+    {
+        id: 'meeting',
+        icon: '🤝',
+        name: 'Meeting Notes',
+        desc: 'Agenda, notes, actions',
+        title: () => `Meeting — ${new Date().toLocaleDateString('en-CA')}`,
+        content: `## Attendees\n\n- \n\n## Agenda\n\n1. \n2. \n\n## Notes\n\n\n\n## Action items\n\n- [ ] \n`
+    },
+    {
+        id: 'project',
+        icon: '🚀',
+        name: 'Project',
+        desc: 'Goals, tasks, notes',
+        title: 'New Project',
+        content: `## Overview\n\n\n\n## Goals\n\n- \n\n## Tasks\n\n- [ ] \n- [ ] \n\n## Notes\n\n`
+    }
+];
+
+function showTemplatePicker() {
+    if (document.getElementById('templatePicker')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'templatePicker';
+    overlay.className = 'template-picker';
+    overlay.innerHTML = `
+        <div class="template-modal">
+            <h2>Choose a template</h2>
+            <div class="template-grid">
+                ${NOTE_TEMPLATES.map(t => `
+                    <button class="template-card" onclick="createFromTemplate('${t.id}')">
+                        <div class="template-card-icon">${t.icon}</div>
+                        <div class="template-card-name">${t.name}</div>
+                        <div class="template-card-desc">${t.desc}</div>
+                    </button>`).join('')}
+            </div>
+            <button class="btn" onclick="document.getElementById('templatePicker').remove()">Cancel</button>
+        </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+}
+
+async function createFromTemplate(templateId) {
+    const tpl = NOTE_TEMPLATES.find(t => t.id === templateId);
+    if (!tpl) return;
+    document.getElementById('templatePicker')?.remove();
+
+    const inputTitle = document.getElementById('newNoteInput')?.value.trim();
+    const title   = inputTitle || (typeof tpl.title === 'function' ? tpl.title() : tpl.title) || 'Untitled';
+    const content = tpl.content;
+
+    try {
+        const res = await apiCall('/notes', {
+            method: 'POST',
+            body: JSON.stringify({ title, content })
+        });
+        if (!res.ok) throw new Error();
+        const note = await res.json();
+        noteCache.set(note.id, note);
+        hideNewNoteForm();
+        await loadNotes();
+        loadNote(note.id);
+        // Auto-open editor for non-blank templates
+        if (tpl.id !== 'blank') {
+            setTimeout(() => {
+                const pane = openPanes.find(p => p.note.id === note.id);
+                if (pane) openEditorModal(pane.uid);
+            }, 300);
+        }
+        showNotification(`Created from ${tpl.name} template`, 'success');
+    } catch { showNotification('Failed to create note', 'error'); }
 }
 
 // ════════════════════════════════════════════════════════════
