@@ -1208,6 +1208,34 @@
         .delete-confirm p { font-size: 12.5px; color: var(--text-secondary); }
         .delete-confirm-actions { display: flex; gap: 6px; }
 
+        /* ── Tag editor (pane) ───────────────────────────────────── */
+        .tag-remove {
+            margin-left: 4px; opacity: 0.5; cursor: pointer;
+            font-size: 10px; line-height: 1;
+        }
+        .tag-remove:hover { opacity: 1; }
+        .tag-add-btn {
+            display: inline-flex; align-items: center;
+            background: transparent; border: 1px dashed var(--border);
+            color: var(--text-muted); padding: 2px 8px;
+            border-radius: 20px; font-size: 11.5px; cursor: pointer;
+            transition: all 0.12s;
+        }
+        .tag-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .tag-inline-input {
+            border: 1px solid var(--accent); border-radius: 20px;
+            padding: 2px 8px; font-size: 11.5px; font-family: var(--font);
+            background: var(--accent-light); color: var(--text-primary);
+            outline: none; width: 90px;
+        }
+
+        /* ── Keyboard nav highlight ──────────────────────────────── */
+        .note-item.keyboard-focus {
+            background: var(--sidebar-hover);
+            outline: 1px solid var(--accent);
+            outline-offset: -1px;
+        }
+
         /* ── Search highlight ────────────────────────────────────── */
         mark.sh { background: rgba(109,94,245,0.22); color: var(--accent); border-radius: 2px; font-weight: 500; font-style: normal; }
 
@@ -1877,7 +1905,7 @@ function populatePaneBody(pane) {
     body.parentElement.appendChild(footer);
 
     renderMarkdownInto(`preview-${uid}`, note.content, uid);
-    updateTagsDisplayFor(`tags-${uid}`, note.content);
+    updateTagsDisplayFor(`tags-${uid}`, note.content, uid);
     loadAndRenderBacklinksFor(uid, note.id);
 
     // Reading progress bar
@@ -2099,11 +2127,68 @@ function extractTags(content) {
     return [...tags];
 }
 
-function updateTagsDisplayFor(elId, content) {
+function updateTagsDisplayFor(elId, content, paneUid) {
     const el = document.getElementById(elId);
     if (!el) return;
     const tags = extractTags(content);
-    el.innerHTML = tags.map(t => `<span class="tag" onclick="filterByTag('${t.replace(/'/g,"\\'")}'">#${t}</span>`).join('');
+    el.innerHTML = tags.map(t =>
+        `<span class="tag">#${escapeHtml(t)}<span class="tag-remove" onclick="removeTagFromPane('${paneUid}','${t.replace(/'/g,"\\'")}',event)" title="Remove tag">✕</span></span>`
+    ).join('') + (paneUid ? `<button class="tag-add-btn" onclick="startAddTag('${paneUid}')">+ tag</button>` : '');
+}
+
+async function removeTagFromPane(paneUid, tag, e) {
+    e?.stopPropagation();
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    const re = new RegExp(`(?<![a-zA-Z0-9])#${escapeRegex(tag)}(?![a-zA-Z0-9_\\-/])`, 'g');
+    const newContent = pane.note.content.replace(re, '').replace(/[ \t]+\n/g, '\n').trim();
+    try {
+        const res = await apiCall(`/notes/${pane.note.id}`, {
+            method: 'PUT', body: JSON.stringify({ title: pane.note.title, content: newContent })
+        });
+        if (!res.ok) throw new Error();
+        const updated = await res.json();
+        noteCache.set(updated.id, updated); pane.note = updated; currentNote = updated;
+        renderPaneContent(pane);
+    } catch { showNotification('Failed to remove tag', 'error'); }
+}
+
+function startAddTag(paneUid) {
+    const tagsEl = document.getElementById(`tags-${paneUid}`);
+    if (!tagsEl) return;
+    // Replace "+ tag" button with input
+    const addBtn = tagsEl.querySelector('.tag-add-btn');
+    if (!addBtn) return;
+    const input = document.createElement('input');
+    input.className = 'tag-inline-input';
+    input.placeholder = 'tag name…';
+    addBtn.replaceWith(input);
+    input.focus();
+    const finish = async () => {
+        const tag = input.value.trim().replace(/^#/, '').replace(/\s+/g, '-');
+        if (tag) {
+            const pane = openPanes.find(p => p.uid === paneUid);
+            if (pane) {
+                const newContent = pane.note.content.trimEnd() + `\n\nTags: #${tag}`;
+                try {
+                    const res = await apiCall(`/notes/${pane.note.id}`, {
+                        method: 'PUT', body: JSON.stringify({ title: pane.note.title, content: newContent })
+                    });
+                    if (!res.ok) throw new Error();
+                    const updated = await res.json();
+                    noteCache.set(updated.id, updated); pane.note = updated; currentNote = updated;
+                    renderPaneContent(pane);
+                } catch { showNotification('Failed to add tag', 'error'); }
+            }
+        } else {
+            updateTagsDisplayFor(`tags-${paneUid}`, openPanes.find(p=>p.uid===paneUid)?.note.content || '', paneUid);
+        }
+    };
+    input.onblur = finish;
+    input.onkeydown = e => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { input.value = ''; input.blur(); }
+    };
 }
 
 async function filterByTag(tag) {
@@ -2500,11 +2585,19 @@ function renderForceGraph(data) {
     svg.selectAll('*').remove();
     const g = svg.append('g');
     svg.call(d3.zoom().scaleExtent([0.1,4]).on('zoom', e => g.attr('transform', e.transform)));
+    // Size nodes by connection count
+    const connCount = {};
+    (data.edges||[]).forEach(e => {
+        const s = e.source?.id ?? e.source, t = e.target?.id ?? e.target;
+        connCount[s] = (connCount[s]||0)+1; connCount[t] = (connCount[t]||0)+1;
+    });
+    data.nodes.forEach(n => { n.size = Math.min(20, 7 + (connCount[n.id]||0) * 2); });
+
     const sim = d3.forceSimulation(data.nodes)
         .force('link', d3.forceLink(data.edges).id(d=>d.id).distance(100))
         .force('charge', d3.forceManyBody().strength(-280))
         .force('center', d3.forceCenter(width/2, height/2))
-        .force('collision', d3.forceCollide().radius(d=>(d.size||8)+10));
+        .force('collision', d3.forceCollide().radius(d=>d.size+10));
     graphSimulation = sim;
     const link = g.append('g').selectAll('line').data(data.edges).enter().append('line').attr('class','graph-link');
     const node = g.append('g').selectAll('g').data(data.nodes).enter().append('g').attr('class','graph-node')
@@ -3512,6 +3605,43 @@ function restoreVersion() {
     const status = document.getElementById('autosaveStatus');
     if (status) { status.textContent = 'Unsaved changes'; status.className = 'autosave-status'; }
 }
+
+// ════════════════════════════════════════════════════════════
+// Sidebar keyboard navigation
+// ════════════════════════════════════════════════════════════
+let sidebarNavIdx = -1;
+
+function getSidebarItems() {
+    return [...document.querySelectorAll('#notesList .note-item')];
+}
+
+function moveSidebarFocus(dir) {
+    const items = getSidebarItems();
+    if (!items.length) return;
+    items[sidebarNavIdx]?.classList.remove('keyboard-focus');
+    sidebarNavIdx = Math.max(0, Math.min(items.length - 1, sidebarNavIdx + dir));
+    items[sidebarNavIdx].classList.add('keyboard-focus');
+    items[sidebarNavIdx].scrollIntoView({ block: 'nearest' });
+}
+
+function openSidebarFocused() {
+    const items = getSidebarItems();
+    const focused = items[sidebarNavIdx];
+    focused?.click();
+}
+
+// Wire arrow keys to sidebar when search is focused or sidebar is hovered
+document.addEventListener('keydown', e => {
+    const inSearch = document.activeElement?.id === 'searchInput';
+    const sidebarHovered = document.querySelector('.sidebar:hover');
+    if (!inSearch && !sidebarHovered) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveSidebarFocus(1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); moveSidebarFocus(-1); }
+    else if (e.key === 'Enter' && sidebarNavIdx >= 0) { e.preventDefault(); openSidebarFocused(); }
+});
+
+// Reset index when list re-renders
+const _origRenderNotesList = renderNotesList;
 
 // ════════════════════════════════════════════════════════════
 // Folder view in sidebar
