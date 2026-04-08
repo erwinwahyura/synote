@@ -625,9 +625,10 @@
 
         /* ── Empty State ────────────────────────────────────────── */
         .empty-state {
+            flex: 1;
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
-            height: 100%; color: var(--text-muted);
+            width: 100%; color: var(--text-muted);
             text-align: center; gap: 10px;
         }
 
@@ -1098,6 +1099,9 @@
             .pane-body { padding: 20px 18px 80px; }
             .pane-footer { padding: 6px 18px; }
 
+            /* Empty state: leave room for fixed top bar */
+            .empty-state { padding-top: 48px; }
+
             /* Show bottom bar */
             .mobile-bottom-bar { display: flex; }
 
@@ -1155,6 +1159,14 @@
 
 <!-- ── Sidebar resize handle ──────────────────────────────── -->
 <div class="sidebar-resize-handle" id="sidebarResizeHandle"></div>
+
+<!-- ── Mobile top bar (shown when no panes open) ──────────── -->
+<div id="mobileTopBar" style="display:none;position:fixed;top:0;left:0;right:0;height:48px;
+     background:var(--content-bg);border-bottom:1px solid var(--border);
+     display:none;align-items:center;padding:0 12px;gap:10px;z-index:90;">
+    <button class="hamburger-btn" style="display:flex;" onclick="openMobileSidebar()" title="Open notes">☰</button>
+    <span style="font-size:14px;font-weight:600;color:var(--text-secondary);">Synote</span>
+</div>
 
 <!-- ── Panes ──────────────────────────────────────────────── -->
 <div class="panes-wrapper" id="panesContainer">
@@ -1557,14 +1569,19 @@ function toggleMinimizePane(paneUid) {
 function renderPanes() {
     const container = document.getElementById('panesContainer');
     if (!container) return;
+    const isMobile = window.innerWidth <= 768;
     if (openPanes.length === 0) {
         container.innerHTML = `<div class="empty-state">
+            ${isMobile ? `<button class="hamburger-btn" style="display:flex;margin-bottom:8px;" onclick="openMobileSidebar()">☰ Open notes</button>` : ''}
             <h2>Welcome to Synote</h2>
             <p>Click a note in the sidebar to open it<br>
             <span style="font-size:12px;opacity:0.7;">Press <kbd style="background:var(--border-light);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:monospace;">⌘K</kbd> for command palette</span></p>
         </div>`;
+        const topBar = document.getElementById('mobileTopBar');
+        if (topBar) topBar.style.display = isMobile ? 'flex' : 'none';
         return;
     }
+    document.getElementById('mobileTopBar')?.style && (document.getElementById('mobileTopBar').style.display = 'none');
     container.innerHTML = openPanes.map(pane => buildPaneShell(pane)).join('');
     openPanes.forEach(pane => populatePaneBody(pane));
     addPaneResizeHandles();
