@@ -997,6 +997,44 @@
             font-family: var(--font-mono); color: var(--text-secondary); white-space: nowrap;
         }
 
+        /* ── Auto-save status ───────────────────────────────────── */
+        .autosave-status {
+            font-size: 11.5px; color: var(--text-muted);
+            transition: color 0.2s;
+            white-space: nowrap;
+        }
+        .autosave-status.saving { color: var(--accent); }
+        .autosave-status.saved  { color: var(--success); }
+
+        /* ── New note inline form ────────────────────────────────── */
+        .new-note-form {
+            padding: 8px 10px;
+            border-bottom: 1px solid var(--sidebar-border);
+            display: none;
+            gap: 6px;
+        }
+        .new-note-form.open { display: flex; }
+        .new-note-input {
+            flex: 1; padding: 6px 9px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid var(--accent);
+            border-radius: var(--radius-sm);
+            color: var(--sidebar-text); font-size: 12.5px;
+            font-family: var(--font); outline: none;
+        }
+        .new-note-input::placeholder { color: var(--sidebar-muted); }
+
+        /* ── Delete confirm inline ───────────────────────────────── */
+        .delete-confirm {
+            position: absolute; top: calc(100% + 4px); right: 0;
+            background: var(--content-bg); border: 1px solid var(--danger);
+            border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+            padding: 10px 14px; z-index: 500; white-space: nowrap;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .delete-confirm p { font-size: 12.5px; color: var(--text-secondary); }
+        .delete-confirm-actions { display: flex; gap: 6px; }
+
         /* ── Search highlight ────────────────────────────────────── */
         mark.sh { background: rgba(109,94,245,0.22); color: var(--accent); border-radius: 2px; font-weight: 500; font-style: normal; }
 
@@ -1133,6 +1171,7 @@
         <div class="sidebar-top">
             <h1>Synote</h1>
             <div class="sidebar-header-btns">
+                <button class="icon-btn" onclick="showNewNoteForm()" title="New note (⌘N)" style="font-size:16px;font-weight:300;">+</button>
                 <button class="icon-btn" onclick="showShortcutsModal()" title="Keyboard shortcuts (?)">⌨</button>
                 <button class="icon-btn" id="zenToggle" onclick="toggleZenMode()" title="Zen mode (⌘.)">◎</button>
                 <button class="icon-btn" id="darkToggle" onclick="toggleDarkMode()" title="Toggle dark mode (⌘D)">🌙</button>
@@ -1147,6 +1186,12 @@
                 <option value="viewed">Viewed</option>
             </select>
         </div>
+    </div>
+    <div class="new-note-form" id="newNoteForm">
+        <input class="new-note-input" id="newNoteInput" placeholder="Note title…"
+               onkeydown="handleNewNoteKey(event)">
+        <button class="btn btn-primary" style="font-size:12px;padding:4px 10px;" onclick="createNewNote()">Create</button>
+        <button class="btn" style="font-size:12px;padding:4px 8px;" onclick="hideNewNoteForm()">✕</button>
     </div>
     <div class="search-box">
         <input type="text" class="search-input" id="searchInput"
@@ -1594,6 +1639,9 @@ function buildPaneShell(pane) {
                 <span style="font-size:11px;color:var(--text-muted);">${updated}</span>
                 <button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${note.id}',event)" title="${isStarred ? 'Unstar' : 'Star note'}">${isStarred ? '⭐' : '☆'}</button>
                 <button class="btn btn-primary" style="font-size:11.5px;padding:3px 9px;" onclick="openEditorModal('${uid}')">Edit</button>
+                <div style="position:relative;" id="delete-wrap-${uid}">
+                    <button class="btn-icon" onclick="confirmDeleteNote('${uid}')" title="Delete note" style="color:var(--danger);">🗑</button>
+                </div>
                 <div class="export-wrap" id="export-${uid}">
                     <button class="btn-icon" onclick="toggleExportMenu('${uid}')" title="Export">⬇</button>
                     <div class="export-menu">
@@ -1918,6 +1966,7 @@ function openEditorModal(paneUid) {
                 <div class="modal-header">
                     <input class="modal-title-input" id="modalTitle" value="${escapeHtml(note.title)}" placeholder="Title">
                     <div class="modal-actions">
+                        <span class="autosave-status" id="autosaveStatus"></span>
                         <button class="btn btn-primary" onclick="saveFromModal()">Save</button>
                         <button class="btn-icon" onclick="closeEditorModal()">✕</button>
                     </div>
@@ -1927,7 +1976,7 @@ function openEditorModal(paneUid) {
                         <div class="editor-pane">
                             <div class="editor-pane-header">Markdown</div>
                             <textarea class="editor-body" id="modalContent"
-                                oninput="updateModalPreview()"
+                                oninput="updateModalPreview();scheduleAutosave()"
                                 onpaste="handleImagePaste(event)"
                                 ondragover="event.preventDefault()"
                                 ondrop="handleImageDrop(event)">${escapeHtml(note.content)}</textarea>
@@ -1960,30 +2009,31 @@ function updateModalPreview() {
     renderMarkdownInto('modalPreview', content, null);
 }
 
-async function saveFromModal() {
+async function saveFromModal(silent = false) {
     const modal = document.getElementById('editorModal');
     const paneUid = modal?.dataset.paneUid;
     const pane = openPanes.find(p => p.uid === paneUid);
     if (!pane) return;
 
-    const title = document.getElementById('modalTitle').value;
+    const title   = document.getElementById('modalTitle').value;
     const content = document.getElementById('modalContent').value;
 
-    try {
-        const res = await fetch(`${API_URL}/notes/${pane.note.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title, content })
-        });
-        const updated = await res.json();
-        noteCache.set(updated.id, updated);
-        pane.note = updated;
-        currentNote = updated;
+    const res = await fetch(`${API_URL}/notes/${pane.note.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content })
+    });
+    if (!res.ok) throw new Error('Save failed');
+    const updated = await res.json();
+    noteCache.set(updated.id, updated);
+    pane.note = updated;
+    currentNote = updated;
+    renderPaneContent(pane);
+    await loadNotes();
+    if (!silent) {
         closeEditorModal();
-        renderPaneContent(pane);
-        await loadNotes();
         showNotification('Saved!', 'success');
-    } catch { showNotification('Save failed', 'error'); }
+    }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2273,6 +2323,11 @@ document.addEventListener('keydown', e => {
         e.preventDefault();
         if (document.getElementById('editorModal')) saveFromModal();
     }
+    // Cmd+N → new note
+    if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        showNewNoteForm();
+    }
     // Cmd+D → toggle dark mode
     if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
         e.preventDefault();
@@ -2427,6 +2482,107 @@ function initSidebarResize() {
         () => document.getElementById('panesContainer'),
         180, 320
     );
+}
+
+// ════════════════════════════════════════════════════════════
+// New note
+// ════════════════════════════════════════════════════════════
+function showNewNoteForm() {
+    const form = document.getElementById('newNoteForm');
+    form.classList.add('open');
+    document.getElementById('newNoteInput').focus();
+}
+
+function hideNewNoteForm() {
+    document.getElementById('newNoteForm').classList.remove('open');
+    document.getElementById('newNoteInput').value = '';
+}
+
+function handleNewNoteKey(e) {
+    if (e.key === 'Enter') createNewNote();
+    if (e.key === 'Escape') hideNewNoteForm();
+}
+
+async function createNewNote() {
+    const title = document.getElementById('newNoteInput').value.trim();
+    if (!title) return;
+    try {
+        const res = await apiCall('/notes', {
+            method: 'POST',
+            body: JSON.stringify({ title, content: '' })
+        });
+        if (!res.ok) throw new Error();
+        const note = await res.json();
+        noteCache.set(note.id, note);
+        hideNewNoteForm();
+        await loadNotes();
+        loadNote(note.id);
+        showNotification(`Created "${title}"`, 'success');
+    } catch { showNotification('Failed to create note', 'error'); }
+}
+
+// ════════════════════════════════════════════════════════════
+// Delete note
+// ════════════════════════════════════════════════════════════
+function confirmDeleteNote(paneUid) {
+    const wrap = document.getElementById(`delete-wrap-${paneUid}`);
+    if (!wrap) return;
+    // Close if already open
+    if (wrap.querySelector('.delete-confirm')) {
+        wrap.querySelector('.delete-confirm').remove(); return;
+    }
+    // Close any other open confirms
+    document.querySelectorAll('.delete-confirm').forEach(el => el.remove());
+
+    const box = document.createElement('div');
+    box.className = 'delete-confirm';
+    box.innerHTML = `
+        <p>Delete this note?<br><span style="font-size:11px;color:var(--text-muted);">This cannot be undone.</span></p>
+        <div class="delete-confirm-actions">
+            <button class="btn btn-danger" onclick="executeDelete('${paneUid}')">Delete</button>
+            <button class="btn" onclick="this.closest('.delete-confirm').remove()">Cancel</button>
+        </div>`;
+    wrap.appendChild(box);
+
+    // Close on outside click
+    setTimeout(() => {
+        const close = e => { if (!wrap.contains(e.target)) { box.remove(); document.removeEventListener('click', close); } };
+        document.addEventListener('click', close);
+    }, 0);
+}
+
+async function executeDelete(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    try {
+        const res = await apiCall(`/notes/${pane.note.id}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) throw new Error();
+        noteCache.delete(pane.note.id);
+        closePane(paneUid);
+        await loadNotes();
+        showNotification('Note deleted', 'info');
+    } catch { showNotification('Delete failed', 'error'); }
+}
+
+// ════════════════════════════════════════════════════════════
+// Auto-save
+// ════════════════════════════════════════════════════════════
+let autosaveTimer = null;
+
+function scheduleAutosave() {
+    const status = document.getElementById('autosaveStatus');
+    if (status) { status.textContent = 'Unsaved changes'; status.className = 'autosave-status'; }
+    clearTimeout(autosaveTimer);
+    autosaveTimer = setTimeout(async () => {
+        if (status) { status.textContent = 'Saving…'; status.className = 'autosave-status saving'; }
+        try {
+            await saveFromModal(true); // silent = true
+            if (status) { status.textContent = '✓ Saved'; status.className = 'autosave-status saved'; }
+            setTimeout(() => { if (status) { status.textContent = ''; status.className = 'autosave-status'; } }, 2000);
+        } catch {
+            if (status) { status.textContent = 'Save failed'; status.className = 'autosave-status'; }
+        }
+    }, 1500);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2602,6 +2758,7 @@ function showShortcutsModal() {
             </div>
             <div class="shortcuts-group">
                 <div class="shortcuts-group-title">Editing</div>
+                ${row('New note','⌘','N')}
                 ${row('Save note','⌘','S')}
                 ${row('Rename pane title','dbl-click title')}
             </div>
