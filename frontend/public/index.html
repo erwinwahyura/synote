@@ -833,6 +833,10 @@
         .wp-body pre { padding: 6px 8px; font-size: 10.5px; border-radius: 4px; }
         .wp-body ul, .wp-body ol { padding-left: 14px; margin-bottom: 4px; }
 
+        /* ── Pane drag-to-reorder ────────────────────────────────── */
+        .note-pane.drag-over { outline: 2px solid var(--accent); outline-offset: -2px; }
+        .note-pane.dragging-pane { opacity: 0.45; }
+
         /* ── Note lock ───────────────────────────────────────────── */
         .lock-btn { font-size: 13px; }
         .note-pane.locked .pane-body { cursor: default; }
@@ -1863,7 +1867,11 @@ function buildPaneShell(pane) {
     const isLocked  = lockedNotes.has(note.id);
     return `
     <div class="note-pane ${minimized ? 'minimized' : ''} ${isLocked ? 'locked' : ''}" id="pane-${uid}">
-        <div class="pane-topbar">
+        <div class="pane-topbar" draggable="true"
+             ondragstart="paneDragStart(event,'${uid}')"
+             ondragover="paneDragOver(event,'${uid}')"
+             ondragleave="paneDragLeave(event,'${uid}')"
+             ondrop="paneDrop(event,'${uid}')">
             <button class="hamburger-btn" onclick="openMobileSidebar()" title="Open notes">☰</button>
             <button class="pane-nav-btn" onclick="goBack('${uid}')" ${canBack ? '' : 'disabled'} title="Go back">←</button>
             <button class="pane-nav-btn" onclick="goForward('${uid}')" ${canFwd ? '' : 'disabled'} title="Go forward">→</button>
@@ -1871,6 +1879,7 @@ function buildPaneShell(pane) {
             <div class="pane-topbar-actions">
                 <span style="font-size:11px;color:var(--text-muted);">${updated}</span>
                 <button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${note.id}',event)" title="${isStarred ? 'Unstar' : 'Star note'}">${isStarred ? '⭐' : '☆'}</button>
+                <button class="btn-icon" onclick="duplicateNote('${uid}')" title="Duplicate note">⧉</button>
                 <button class="btn-icon lock-btn" onclick="toggleLockNote('${note.id}')" title="${isLocked ? 'Unlock note' : 'Lock note'}">${isLocked ? '🔒' : '🔓'}</button>
                 <button class="btn-icon" onclick="toggleFindBar('${uid}')" title="Find in note (⌘F)">🔍</button>
                 <button class="btn btn-primary" style="font-size:11.5px;padding:3px 9px;${isLocked ? 'opacity:0.4;pointer-events:none;' : ''}" onclick="openEditorModal('${uid}')">Edit</button>
@@ -2327,7 +2336,7 @@ function openEditorModal(paneUid) {
                             <div class="editor-pane-header">Markdown</div>
                             <textarea class="editor-body" id="modalContent"
                                 oninput="updateModalPreview();scheduleAutosave()"
-                                onpaste="handleImagePaste(event)"
+                                onpaste="handleSmartPaste(event)"
                                 ondragover="event.preventDefault()"
                                 ondrop="handleImageDrop(event)">${escapeHtml(note.content)}</textarea>
                         </div>
@@ -3804,6 +3813,100 @@ function toggleFolderView() {
     if (btn) { btn.style.opacity = folderViewOpen ? '1' : ''; btn.style.color = folderViewOpen ? 'var(--accent)' : ''; }
     if (folderViewOpen) renderFolderView();
     else renderNotesList();
+}
+
+// ════════════════════════════════════════════════════════════
+// Note duplication
+// ════════════════════════════════════════════════════════════
+async function duplicateNote(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    const { note } = pane;
+    try {
+        const res = await apiCall('/notes', {
+            method: 'POST',
+            body: JSON.stringify({ title: `${note.title} (copy)`, content: note.content })
+        });
+        if (!res.ok) throw new Error();
+        const dup = await res.json();
+        noteCache.set(dup.id, dup);
+        await loadNotes();
+        loadNote(dup.id);
+        showNotification('Note duplicated', 'success');
+    } catch { showNotification('Failed to duplicate', 'error'); }
+}
+
+// ════════════════════════════════════════════════════════════
+// Drag-to-reorder panes
+// ════════════════════════════════════════════════════════════
+let dragPaneUid = null;
+
+function paneDragStart(e, uid) {
+    dragPaneUid = uid;
+    e.dataTransfer.effectAllowed = 'move';
+    document.getElementById(`pane-${uid}`)?.classList.add('dragging-pane');
+}
+
+function paneDragOver(e, uid) {
+    if (!dragPaneUid || dragPaneUid === uid) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    document.getElementById(`pane-${uid}`)?.classList.add('drag-over');
+}
+
+function paneDragLeave(e, uid) {
+    document.getElementById(`pane-${uid}`)?.classList.remove('drag-over');
+}
+
+function paneDrop(e, targetUid) {
+    e.preventDefault();
+    document.querySelectorAll('.note-pane').forEach(el => el.classList.remove('drag-over', 'dragging-pane'));
+    if (!dragPaneUid || dragPaneUid === targetUid) { dragPaneUid = null; return; }
+
+    const fromIdx = openPanes.findIndex(p => p.uid === dragPaneUid);
+    const toIdx   = openPanes.findIndex(p => p.uid === targetUid);
+    if (fromIdx === -1 || toIdx === -1) { dragPaneUid = null; return; }
+
+    const [moved] = openPanes.splice(fromIdx, 1);
+    openPanes.splice(toIdx, 0, moved);
+    dragPaneUid = null;
+    renderPanes();
+}
+
+// ════════════════════════════════════════════════════════════
+// Smart URL paste in editor
+// ════════════════════════════════════════════════════════════
+function handleSmartPaste(event) {
+    // First check for image paste
+    const items = event.clipboardData?.items;
+    if (items) {
+        for (const item of items) {
+            if (item.type.startsWith('image/')) {
+                event.preventDefault();
+                insertImageFromFile(event.target, item.getAsFile());
+                return;
+            }
+        }
+    }
+
+    // Smart URL paste: if clipboard text is a URL and there's selected text, wrap it
+    const text = event.clipboardData?.getData('text') || '';
+    const isUrl = /^https?:\/\/[^\s]+$/.test(text.trim());
+    if (!isUrl) return; // let default paste handle it
+
+    const textarea = event.target;
+    const sel = textarea.value.substring(textarea.selectionStart, textarea.selectionEnd);
+    if (sel) {
+        // Wrap selected text as [selected](url)
+        event.preventDefault();
+        insertAtCursor(textarea, `[${sel}](${text.trim()})`);
+        updateModalPreview();
+    } else {
+        // No selection: paste as <url> (auto-linked)
+        event.preventDefault();
+        insertAtCursor(textarea, `<${text.trim()}>`);
+        updateModalPreview();
+    }
 }
 
 // ════════════════════════════════════════════════════════════
