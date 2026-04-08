@@ -711,7 +711,7 @@
 
         .modal-actions { display: flex; gap: 8px; align-items: center; }
 
-        .modal-body { flex: 1; display: flex; overflow: hidden; }
+        .modal-body { flex: 1; display: flex; overflow: hidden; position: relative; }
 
         /* ── Editor panes ───────────────────────────────────────── */
         .editor-split { display: flex; flex: 1; overflow: hidden; }
@@ -972,6 +972,66 @@
         }
 
         .minimize-btn:hover { background: var(--border-light); color: var(--text-primary); }
+
+        /* ── Stats modal ─────────────────────────────────────────── */
+        .stats-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 10px; margin-bottom: 18px;
+        }
+        .stat-card {
+            background: var(--content-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+        }
+        .stat-value { font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1; }
+        .stat-label { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+        .stat-top { margin-top: 14px; border-top: 1px solid var(--border-light); padding-top: 14px; }
+        .stat-top-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 8px; }
+        .stat-top-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 4px 0; font-size: 12.5px; color: var(--text-secondary);
+            border-bottom: 1px solid var(--border-light);
+        }
+        .stat-top-item:last-child { border-bottom: none; }
+        .stat-top-item-val { font-weight: 600; color: var(--accent); }
+
+        /* ── Version history ─────────────────────────────────────── */
+        .history-panel {
+            position: absolute; top: 0; right: 0; bottom: 0;
+            width: 260px; background: var(--content-secondary);
+            border-left: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            z-index: 10; animation: slideInRight 0.18s ease;
+        }
+        .history-header {
+            padding: 10px 14px; border-bottom: 1px solid var(--border);
+            font-size: 12px; font-weight: 600; color: var(--text-secondary);
+            display: flex; justify-content: space-between; align-items: center;
+            flex-shrink: 0;
+        }
+        .history-list { flex: 1; overflow-y: auto; }
+        .history-item {
+            padding: 10px 14px; border-bottom: 1px solid var(--border-light);
+            cursor: pointer; transition: background 0.1s;
+        }
+        .history-item:hover, .history-item.selected { background: var(--accent-dim); }
+        .history-item-time { font-size: 12px; font-weight: 500; color: var(--text-primary); }
+        .history-item-preview { font-size: 11px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .history-actions { padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-shrink: 0; }
+
+        /* ── Folder tree ─────────────────────────────────────────── */
+        .folder-item {
+            padding: 6px 8px; border-radius: var(--radius-sm);
+            cursor: pointer; display: flex; align-items: center; gap: 6px;
+            font-size: 12px; font-weight: 600; color: var(--sidebar-muted);
+            transition: background 0.1s; user-select: none;
+        }
+        .folder-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text); }
+        .folder-arrow { font-size: 9px; transition: transform 0.15s; }
+        .folder-item.open .folder-arrow { transform: rotate(90deg); }
+        .folder-notes { padding-left: 14px; }
+        .folder-notes.closed { display: none; }
 
         /* ── Star button ────────────────────────────────────────── */
         .star-btn {
@@ -1295,6 +1355,8 @@
         </div>
         <div class="sidebar-toolbar">
             <button class="graph-btn" onclick="showGraphView()">⬡ Graph</button>
+            <button class="graph-btn" id="folderViewBtn" onclick="toggleFolderView()" style="flex:0 0 auto;padding:6px 8px;" title="Folder view">📁</button>
+            <button class="graph-btn" onclick="showStatsModal()" style="flex:0 0 auto;padding:6px 8px;" title="Stats">📊</button>
             <select class="sort-select" id="sortSelect" onchange="setSortOrder(this.value)" title="Sort notes">
                 <option value="updated">Recent</option>
                 <option value="title">A → Z</option>
@@ -2118,6 +2180,7 @@ function openEditorModal(paneUid) {
                     <input class="modal-title-input" id="modalTitle" value="${escapeHtml(note.title)}" placeholder="Title">
                     <div class="modal-actions">
                         <span class="autosave-status" id="autosaveStatus"></span>
+                        <button class="btn" onclick="toggleHistoryPanel()" title="Version history">🕐 History</button>
                         <button class="btn btn-primary" onclick="saveFromModal()">Save</button>
                         <button class="btn-icon" onclick="closeEditorModal()">✕</button>
                     </div>
@@ -2168,6 +2231,9 @@ async function saveFromModal(silent = false) {
 
     const title   = document.getElementById('modalTitle').value;
     const content = document.getElementById('modalContent').value;
+
+    // Save a version snapshot before overwriting
+    saveVersion(pane.note.id, pane.note.title, pane.note.content);
 
     const res = await fetch(`${API_URL}/notes/${pane.note.id}`, {
         method: 'PUT',
@@ -3279,6 +3345,245 @@ function extractSnippet(content, query, contextBefore = 40, contextAfter = 90) {
 
     const escaped = escapeHtml(raw);
     return escaped.replace(new RegExp(`(${escapeRegex(escapeHtml(query))})`, 'gi'), '<mark class="sh">$1</mark>');
+}
+
+// ════════════════════════════════════════════════════════════
+// Stats dashboard
+// ════════════════════════════════════════════════════════════
+async function showStatsModal() {
+    if (document.getElementById('statsOverlay')) return;
+
+    // Gather data in parallel
+    const [tagsRes, graphRes] = await Promise.all([
+        apiCall('/tags').then(r => r.ok ? r.json() : []).catch(() => []),
+        apiCall('/graph').then(r => r.ok ? r.json() : {nodes:[],edges:[]}).catch(() => ({nodes:[],edges:[]}))
+    ]);
+
+    const totalNotes = notes.length;
+    const totalTags  = tagsRes.length || 0;
+    const totalLinks = graphRes.edges?.length || 0;
+
+    // Word count from cache
+    let totalWords = 0;
+    noteCache.forEach(n => { totalWords += getWordCount(n.content); });
+    const avgWords = totalNotes ? Math.round(totalWords / totalNotes) : 0;
+
+    // Most connected notes from graph
+    const linkCount = {};
+    (graphRes.edges || []).forEach(e => {
+        const s = e.source?.id ?? e.source;
+        const t = e.target?.id ?? e.target;
+        linkCount[s] = (linkCount[s] || 0) + 1;
+        linkCount[t] = (linkCount[t] || 0) + 1;
+    });
+    const topNotes = Object.entries(linkCount)
+        .sort((a,b) => b[1]-a[1]).slice(0,3)
+        .map(([id, cnt]) => ({ note: notes.find(n=>n.id===id), cnt }))
+        .filter(x => x.note);
+
+    // Top tags
+    const topTags = [...tagsRes].sort((a,b) => (b.count||0)-(a.count||0)).slice(0,3);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'statsOverlay';
+    overlay.className = 'shortcuts-overlay';
+    overlay.innerHTML = `
+        <div class="shortcuts-modal" style="width:480px;">
+            <h2>📊 Vault Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value">${totalNotes}</div><div class="stat-label">Notes</div></div>
+                <div class="stat-card"><div class="stat-value">${totalTags}</div><div class="stat-label">Tags</div></div>
+                <div class="stat-card"><div class="stat-value">${totalLinks}</div><div class="stat-label">Links</div></div>
+                <div class="stat-card"><div class="stat-value">${avgWords || '—'}</div><div class="stat-label">Avg words/note</div></div>
+            </div>
+            ${topNotes.length ? `
+            <div class="stat-top">
+                <div class="stat-top-title">Most connected notes</div>
+                ${topNotes.map(({note,cnt}) => `
+                    <div class="stat-top-item" onclick="loadNote('${note.id}');document.getElementById('statsOverlay').remove();" style="cursor:pointer;">
+                        <span>${escapeHtml(note.title)}</span>
+                        <span class="stat-top-item-val">${cnt} link${cnt!==1?'s':''}</span>
+                    </div>`).join('')}
+            </div>` : ''}
+            ${topTags.length ? `
+            <div class="stat-top">
+                <div class="stat-top-title">Top tags</div>
+                ${topTags.map(t => `
+                    <div class="stat-top-item">
+                        <span>#${escapeHtml(t.name)}</span>
+                        <span class="stat-top-item-val">${t.count} note${t.count!==1?'s':''}</span>
+                    </div>`).join('')}
+            </div>` : ''}
+            <div style="text-align:center;margin-top:14px;">
+                <button class="btn" onclick="document.getElementById('statsOverlay').remove()">Close</button>
+            </div>
+        </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+}
+
+// ════════════════════════════════════════════════════════════
+// Version history (localStorage-based)
+// ════════════════════════════════════════════════════════════
+const MAX_VERSIONS = 15;
+
+function saveVersion(noteId, title, content) {
+    const key = `synote_history_${noteId}`;
+    const versions = JSON.parse(localStorage.getItem(key) || '[]');
+    // Don't save if identical to last version
+    if (versions[0]?.content === content && versions[0]?.title === title) return;
+    versions.unshift({ ts: Date.now(), title, content });
+    if (versions.length > MAX_VERSIONS) versions.splice(MAX_VERSIONS);
+    localStorage.setItem(key, JSON.stringify(versions));
+}
+
+function getVersions(noteId) {
+    return JSON.parse(localStorage.getItem(`synote_history_${noteId}`) || '[]');
+}
+
+let selectedVersionIdx = -1;
+
+function toggleHistoryPanel() {
+    const modal = document.getElementById('editorModal');
+    if (!modal) return;
+    const existing = modal.querySelector('.history-panel');
+    if (existing) { existing.remove(); return; }
+
+    const paneUid = modal.dataset.paneUid;
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+
+    const versions = getVersions(pane.note.id);
+    const panel = document.createElement('div');
+    panel.className = 'history-panel';
+
+    if (!versions.length) {
+        panel.innerHTML = `
+            <div class="history-header"><span>Version History</span><button class="btn-icon" onclick="this.closest('.history-panel').remove()">✕</button></div>
+            <div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px;">No history yet.<br>Versions are saved automatically on each save.</div>`;
+    } else {
+        selectedVersionIdx = -1;
+        panel.innerHTML = `
+            <div class="history-header"><span>Version History</span><button class="btn-icon" onclick="this.closest('.history-panel').remove()">✕</button></div>
+            <div class="history-list" id="historyList">
+                ${versions.map((v,i) => `
+                    <div class="history-item" data-idx="${i}" onclick="previewVersion(${i})">
+                        <div class="history-item-time">${new Date(v.ts).toLocaleString()}</div>
+                        <div class="history-item-preview">${escapeHtml(v.content.slice(0,60))}…</div>
+                    </div>`).join('')}
+            </div>
+            <div class="history-actions">
+                <button class="btn btn-primary" id="restoreBtn" onclick="restoreVersion()" disabled style="flex:1;">Restore</button>
+                <button class="btn" onclick="this.closest('.history-panel').remove()">Cancel</button>
+            </div>`;
+    }
+
+    modal.querySelector('.modal-body').appendChild(panel);
+}
+
+function previewVersion(idx) {
+    selectedVersionIdx = idx;
+    const modal = document.getElementById('editorModal');
+    const paneUid = modal?.dataset.paneUid;
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+
+    const versions = getVersions(pane.note.id);
+    const v = versions[idx];
+    if (!v) return;
+
+    // Highlight selected
+    modal.querySelectorAll('.history-item').forEach((el,i) => el.classList.toggle('selected', i===idx));
+
+    // Show version content in editor (preview only)
+    document.getElementById('modalContent').value = v.content;
+    document.getElementById('modalTitle').value   = v.title;
+    updateModalPreview();
+    document.getElementById('restoreBtn').disabled = false;
+
+    const status = document.getElementById('autosaveStatus');
+    if (status) { status.textContent = `Viewing ${new Date(v.ts).toLocaleString()}`; status.className = 'autosave-status'; }
+}
+
+function restoreVersion() {
+    // Content is already in the editor from preview — just close the panel
+    document.querySelector('.history-panel')?.remove();
+    showNotification('Version restored — save to confirm', 'info');
+    const status = document.getElementById('autosaveStatus');
+    if (status) { status.textContent = 'Unsaved changes'; status.className = 'autosave-status'; }
+}
+
+// ════════════════════════════════════════════════════════════
+// Folder view in sidebar
+// ════════════════════════════════════════════════════════════
+let folderViewOpen = false;
+
+function renderFolderView() {
+    // Group notes by top-level folder from note.path
+    const folders = {};
+    const root = [];
+    notes.forEach(note => {
+        const parts = (note.path || '').split('/');
+        if (parts.length <= 1) {
+            root.push(note);
+        } else {
+            const folder = parts.slice(0, -1).join('/');
+            if (!folders[folder]) folders[folder] = [];
+            folders[folder].push(note);
+        }
+    });
+
+    const openIds = new Set(openPanes.map(p => p.note.id));
+    let html = '';
+
+    // Folders first
+    Object.entries(folders).sort(([a],[b]) => a.localeCompare(b)).forEach(([folder, folderNotes]) => {
+        const folderId = 'folder-' + folder.replace(/[^a-z0-9]/gi, '-');
+        html += `<div class="folder-item" id="${folderId}-btn" onclick="toggleFolder('${folderId}')">
+            <span class="folder-arrow">▶</span> 📁 ${escapeHtml(folder)}
+            <span style="margin-left:auto;font-size:10px;opacity:0.6;">${folderNotes.length}</span>
+        </div>
+        <div class="folder-notes closed" id="${folderId}-notes">`;
+        folderNotes.forEach(note => {
+            const active = openIds.has(note.id);
+            html += `<div class="note-item ${active?'active':''}" onclick="loadNote('${note.id}')">
+                <div class="note-item-title">${escapeHtml(note.title||'Untitled')}</div>
+            </div>`;
+        });
+        html += `</div>`;
+    });
+
+    // Root notes
+    if (root.length) {
+        if (Object.keys(folders).length) html += `<div class="list-section-label">Ungrouped</div>`;
+        root.forEach(note => {
+            const active = openIds.has(note.id);
+            html += `<div class="note-item ${active?'active':''}" onclick="loadNote('${note.id}')">
+                <div class="note-item-title">${escapeHtml(note.title||'Untitled')}</div>
+                <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
+            </div>`;
+        });
+    }
+
+    document.getElementById('notesList').innerHTML = html;
+}
+
+function toggleFolder(folderId) {
+    const btn   = document.getElementById(`${folderId}-btn`);
+    const notes = document.getElementById(`${folderId}-notes`);
+    if (!btn || !notes) return;
+    const isOpen = !notes.classList.contains('closed');
+    notes.classList.toggle('closed', isOpen);
+    btn.classList.toggle('open', !isOpen);
+}
+
+// Hook folder view into the graph button area
+function toggleFolderView() {
+    folderViewOpen = !folderViewOpen;
+    const btn = document.getElementById('folderViewBtn');
+    if (btn) { btn.style.opacity = folderViewOpen ? '1' : ''; btn.style.color = folderViewOpen ? 'var(--accent)' : ''; }
+    if (folderViewOpen) renderFolderView();
+    else renderNotesList();
 }
 
 // ════════════════════════════════════════════════════════════
