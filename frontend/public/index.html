@@ -985,6 +985,56 @@
         .star-btn:hover { color: var(--text-primary); transform: scale(1.15); }
         .star-btn.starred { color: #f5a623; }
 
+        /* ── Reading progress bar ───────────────────────────────── */
+        .pane-progress {
+            height: 2px;
+            background: var(--accent);
+            width: 0%;
+            transition: width 0.1s linear;
+            flex-shrink: 0;
+        }
+
+        /* ── Find in note ────────────────────────────────────────── */
+        .find-bar {
+            display: flex; align-items: center; gap: 7px;
+            padding: 6px 12px;
+            border-top: 1px solid var(--border);
+            background: var(--content-secondary);
+            flex-shrink: 0;
+            animation: fadeIn 0.1s ease;
+        }
+
+        .find-input {
+            flex: 1; padding: 4px 9px;
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            background: var(--content-bg); color: var(--text-primary);
+            font-size: 12.5px; font-family: var(--font); outline: none;
+            transition: border-color 0.15s;
+        }
+        .find-input:focus { border-color: var(--accent); }
+        .find-input.no-match { border-color: var(--danger); color: var(--danger); }
+
+        .find-count { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; min-width: 50px; }
+
+        mark.find-hl {
+            background: rgba(245,166,35,0.4); color: inherit;
+            border-radius: 2px;
+        }
+        mark.find-hl.current { background: #f5a623; color: #000; }
+
+        /* ── Color picker ────────────────────────────────────────── */
+        .color-picker-btn {
+            width: 18px; height: 18px;
+            border-radius: 50%; border: 2px solid rgba(255,255,255,0.2);
+            cursor: pointer; flex-shrink: 0;
+            background: var(--accent);
+            padding: 0; position: relative; overflow: hidden;
+        }
+        .color-picker-btn input[type=color] {
+            position: absolute; inset: 0;
+            opacity: 0; cursor: pointer; width: 100%; height: 100%;
+        }
+
         /* ── Pane footer ─────────────────────────────────────────── */
         .pane-footer {
             padding: 6px 44px;
@@ -1234,6 +1284,9 @@
         <div class="sidebar-top">
             <h1>Synote</h1>
             <div class="sidebar-header-btns">
+                <button class="color-picker-btn" title="Theme color">
+                    <input type="color" id="accentColorPicker" oninput="applyAccentColor(this.value)" title="Theme color">
+                </button>
                 <button class="icon-btn" onclick="showNewNoteForm()" title="New note (⌘N)" style="font-size:16px;font-weight:300;">+</button>
                 <button class="icon-btn" onclick="showShortcutsModal()" title="Keyboard shortcuts (?)">⌨</button>
                 <button class="icon-btn" id="zenToggle" onclick="toggleZenMode()" title="Zen mode (⌘.)">◎</button>
@@ -1319,6 +1372,7 @@ const MAX_PANES  = 5;
 // ════════════════════════════════════════════════════════════
 function init() {
     applyDarkMode();
+    initAccentColor();
     document.getElementById('sortSelect').value = sortOrder;
     initSidebarResize();
     initSwipeGesture();
@@ -1702,6 +1756,7 @@ function buildPaneShell(pane) {
             <div class="pane-topbar-actions">
                 <span style="font-size:11px;color:var(--text-muted);">${updated}</span>
                 <button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${note.id}',event)" title="${isStarred ? 'Unstar' : 'Star note'}">${isStarred ? '⭐' : '☆'}</button>
+                <button class="btn-icon" onclick="toggleFindBar('${uid}')" title="Find in note (⌘F)">🔍</button>
                 <button class="btn btn-primary" style="font-size:11.5px;padding:3px 9px;" onclick="openEditorModal('${uid}')">Edit</button>
                 <div style="position:relative;" id="delete-wrap-${uid}">
                     <button class="btn-icon" onclick="confirmDeleteNote('${uid}')" title="Delete note" style="color:var(--danger);">🗑</button>
@@ -1717,6 +1772,7 @@ function buildPaneShell(pane) {
                 <button class="btn-icon" onclick="closePane('${uid}')" title="Close pane">✕</button>
             </div>
         </div>
+        <div class="pane-progress" id="pane-progress-${uid}"></div>
         <div class="pane-body" id="pane-body-${uid}">
             <div style="color:var(--text-muted);font-size:13px;padding:40px 0;text-align:center;">Loading…</div>
         </div>
@@ -1761,6 +1817,15 @@ function populatePaneBody(pane) {
     renderMarkdownInto(`preview-${uid}`, note.content, uid);
     updateTagsDisplayFor(`tags-${uid}`, note.content);
     loadAndRenderBacklinksFor(uid, note.id);
+
+    // Reading progress bar
+    const progressBar = document.getElementById(`pane-progress-${uid}`);
+    body.addEventListener('scroll', () => {
+        if (!progressBar) return;
+        const pct = body.scrollHeight <= body.clientHeight ? 0
+            : (body.scrollTop / (body.scrollHeight - body.clientHeight)) * 100;
+        progressBar.style.width = pct + '%';
+    }, { passive: true });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2012,11 +2077,14 @@ async function loadAndRenderBacklinksFor(paneUid, noteId) {
     let html = '';
     if (data.incoming?.length) {
         html += `<div class="backlinks-section"><div class="backlinks-section-title">Links to this note</div>`;
-        html += data.incoming.map(l =>
-            `<div class="backlink-item" onclick="navigateInPane('${paneUid}','${l.target_id}')">
+        html += data.incoming.map(l => {
+            const cached = noteCache.get(l.target_id);
+            const excerpt = cached ? getBacklinkExcerpt(cached.content, l.display_text) : '';
+            return `<div class="backlink-item" onclick="navigateInPane('${paneUid}','${l.target_id}')">
                 <div class="backlink-title">${escapeHtml(l.display_text)}</div>
-             </div>`
-        ).join('') + '</div>';
+                ${excerpt ? `<div class="note-item-snippet" style="padding-left:0;">${excerpt}</div>` : ''}
+             </div>`;
+        }).join('') + '</div>';
     }
     if (data.outgoing?.length) {
         html += `<div class="backlinks-section"><div class="backlinks-section-title">Links from this note</div>`;
@@ -2426,6 +2494,12 @@ document.addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
         if (document.getElementById('editorModal')) saveFromModal();
+    }
+    // Cmd+F → find in active pane
+    if ((e.metaKey || e.ctrlKey) && e.key === 'f' && !document.getElementById('editorModal')) {
+        e.preventDefault();
+        const pane = openPanes[0];
+        if (pane) toggleFindBar(pane.uid);
     }
     // Cmd+N → new note
     if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
@@ -2864,6 +2938,7 @@ function showShortcutsModal() {
                 <div class="shortcuts-group-title">Editing</div>
                 ${row('New note','⌘','N')}
                 ${row('Save note','⌘','S')}
+                ${row('Find in note','⌘','F')}
                 ${row('Rename pane title','dbl-click title')}
             </div>
             <div class="shortcuts-group">
@@ -2877,6 +2952,143 @@ function showShortcutsModal() {
         </div>`;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
+}
+
+// ════════════════════════════════════════════════════════════
+// Find in note
+// ════════════════════════════════════════════════════════════
+const findState = {}; // paneUid → { matches, idx }
+
+function toggleFindBar(paneUid) {
+    const pane = document.getElementById(`pane-${paneUid}`);
+    if (!pane) return;
+    const existing = pane.querySelector('.find-bar');
+    if (existing) { closeFindBar(paneUid); return; }
+
+    const bar = document.createElement('div');
+    bar.className = 'find-bar';
+    bar.id = `find-bar-${paneUid}`;
+    bar.innerHTML = `
+        <input class="find-input" id="find-input-${paneUid}" placeholder="Find in note…"
+               oninput="runFind('${paneUid}')" onkeydown="handleFindKey(event,'${paneUid}')">
+        <span class="find-count" id="find-count-${paneUid}"></span>
+        <button class="btn-icon" onclick="stepFind('${paneUid}',-1)" title="Previous">↑</button>
+        <button class="btn-icon" onclick="stepFind('${paneUid}',1)"  title="Next">↓</button>
+        <button class="btn-icon" onclick="closeFindBar('${paneUid}')">✕</button>`;
+
+    // Insert before footer (or append to pane)
+    const footer = pane.querySelector('.pane-footer');
+    footer ? footer.before(bar) : pane.appendChild(bar);
+    document.getElementById(`find-input-${paneUid}`)?.focus();
+}
+
+function closeFindBar(paneUid) {
+    clearFindHighlights(paneUid);
+    document.getElementById(`find-bar-${paneUid}`)?.remove();
+    delete findState[paneUid];
+}
+
+function handleFindKey(e, paneUid) {
+    if (e.key === 'Escape') { closeFindBar(paneUid); return; }
+    if (e.key === 'Enter') stepFind(paneUid, e.shiftKey ? -1 : 1);
+}
+
+function runFind(paneUid) {
+    const query = document.getElementById(`find-input-${paneUid}`)?.value || '';
+    clearFindHighlights(paneUid);
+    const input = document.getElementById(`find-input-${paneUid}`);
+    const count = document.getElementById(`find-count-${paneUid}`);
+    if (!query) { count.textContent = ''; input?.classList.remove('no-match'); return; }
+
+    const preview = document.getElementById(`preview-${paneUid}`);
+    if (!preview) return;
+
+    // Walk text nodes and wrap matches
+    const matches = [];
+    const walker = document.createTreeWalker(preview, NodeFilter.SHOW_TEXT);
+    const re = new RegExp(escapeRegex(query), 'gi');
+    const nodesToReplace = [];
+    let node;
+    while ((node = walker.nextNode())) {
+        if (re.test(node.nodeValue)) nodesToReplace.push(node);
+        re.lastIndex = 0;
+    }
+    nodesToReplace.forEach(textNode => {
+        const frag = document.createDocumentFragment();
+        let last = 0, m;
+        re.lastIndex = 0;
+        while ((m = re.exec(textNode.nodeValue)) !== null) {
+            frag.appendChild(document.createTextNode(textNode.nodeValue.slice(last, m.index)));
+            const mark = document.createElement('mark');
+            mark.className = 'find-hl';
+            mark.textContent = m[0];
+            mark.dataset.findPaneUid = paneUid;
+            frag.appendChild(mark);
+            matches.push(mark);
+            last = m.index + m[0].length;
+        }
+        frag.appendChild(document.createTextNode(textNode.nodeValue.slice(last)));
+        textNode.parentNode.replaceChild(frag, textNode);
+    });
+
+    findState[paneUid] = { matches, idx: -1 };
+
+    if (matches.length === 0) {
+        input?.classList.add('no-match');
+        count.textContent = 'No matches';
+    } else {
+        input?.classList.remove('no-match');
+        stepFind(paneUid, 1);
+    }
+}
+
+function stepFind(paneUid, dir) {
+    const state = findState[paneUid];
+    if (!state || !state.matches.length) return;
+    state.matches[state.idx]?.classList.remove('current');
+    state.idx = (state.idx + dir + state.matches.length) % state.matches.length;
+    const cur = state.matches[state.idx];
+    cur.classList.add('current');
+    cur.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    document.getElementById(`find-count-${paneUid}`).textContent =
+        `${state.idx + 1} / ${state.matches.length}`;
+}
+
+function clearFindHighlights(paneUid) {
+    document.querySelectorAll(`mark.find-hl[data-find-pane-uid="${paneUid}"]`).forEach(m => {
+        m.replaceWith(document.createTextNode(m.textContent));
+    });
+}
+
+// ════════════════════════════════════════════════════════════
+// Accent color picker
+// ════════════════════════════════════════════════════════════
+function applyAccentColor(hex) {
+    const r = parseInt(hex.slice(1,3),16);
+    const g = parseInt(hex.slice(3,5),16);
+    const b = parseInt(hex.slice(5,7),16);
+    const root = document.documentElement.style;
+    root.setProperty('--accent', hex);
+    root.setProperty('--accent-hover', shadeHex(hex, -20));
+    root.setProperty('--accent-light', `rgba(${r},${g},${b},0.12)`);
+    root.setProperty('--accent-dim',   `rgba(${r},${g},${b},0.08)`);
+    document.getElementById('accentColorPicker').value = hex;
+    document.querySelector('.color-picker-btn').style.background = hex;
+    localStorage.setItem('synote_accent', hex);
+}
+
+function shadeHex(hex, amt) {
+    const clamp = v => Math.max(0, Math.min(255, v));
+    const r = clamp(parseInt(hex.slice(1,3),16) + amt);
+    const g = clamp(parseInt(hex.slice(3,5),16) + amt);
+    const b = clamp(parseInt(hex.slice(5,7),16) + amt);
+    return `#${[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('')}`;
+}
+
+function initAccentColor() {
+    const saved = localStorage.getItem('synote_accent');
+    if (saved) applyAccentColor(saved);
+    else document.getElementById('accentColorPicker').value = '#6d5ef5';
 }
 
 // ════════════════════════════════════════════════════════════
@@ -3019,6 +3231,21 @@ async function createFromTemplate(templateId) {
 // Search highlight helper
 // ════════════════════════════════════════════════════════════
 function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function getBacklinkExcerpt(content, linkedTitle) {
+    // Find [[linkedTitle]] in content and return surrounding sentence
+    const re = new RegExp(`\\[\\[${escapeRegex(linkedTitle)}(?:\\|[^\\]]+)?\\]\\]`, 'i');
+    const m = re.exec(content);
+    if (!m) return '';
+    const start = Math.max(0, m.index - 60);
+    const end   = Math.min(content.length, m.index + m[0].length + 60);
+    let raw = (start > 0 ? '…' : '') + content.slice(start, end).replace(/\n/g, ' ') + (end < content.length ? '…' : '');
+    // Highlight the wikilink text
+    return escapeHtml(raw).replace(
+        new RegExp(escapeRegex(escapeHtml(m[0])), 'gi'),
+        `<mark class="sh">${escapeHtml(linkedTitle)}</mark>`
+    );
+}
 
 function highlightMatch(text, query) {
     const escaped = escapeHtml(text);
