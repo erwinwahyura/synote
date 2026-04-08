@@ -1,1438 +1,2407 @@
-Warning: Permanently added '46.224.127.221' (ED25519) to the list of known hosts.
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Synote Read-Only - Personal Notes</title>
+    <title>Synote - Personal Notes</title>
 
-    <!-- Markdown rendering -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
     <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
-
-    <!-- Syntax highlighting for code blocks -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" id="hljs-theme">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-
-    <!-- D3.js for graph visualization -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* ── Variables ──────────────────────────────────────────── */
+        :root {
+            --sidebar-bg: #16161e;
+            --sidebar-border: rgba(255,255,255,0.07);
+            --sidebar-text: #c9c9d9;
+            --sidebar-muted: #666680;
+            --sidebar-hover: rgba(255,255,255,0.05);
+            --sidebar-active-bg: rgba(109,94,245,0.18);
+            --sidebar-active-text: #a89cff;
+            --sidebar-active-border: #6d5ef5;
+
+            --content-bg: #ffffff;
+            --content-secondary: #fafafa;
+            --border: #e8e8ef;
+            --border-light: #f2f2f7;
+
+            --accent: #6d5ef5;
+            --accent-hover: #5a4de0;
+            --accent-light: #eeecff;
+            --accent-dim: rgba(109,94,245,0.1);
+
+            --text-primary: #1a1a2e;
+            --text-secondary: #5a5a72;
+            --text-muted: #9999b0;
+
+            --danger: #e5534b;
+            --danger-light: #fff0ef;
+            --success: #3fb950;
+
+            --radius-sm: 5px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.1);
+            --shadow-lg: 0 16px 48px rgba(0,0,0,0.2);
+
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Monaco', 'Menlo', monospace;
+
+            --sidebar-width: 260px;
         }
+
+        /* ── Dark Mode ──────────────────────────────────────────── */
+        html.dark {
+            --content-bg: #1e1e2e;
+            --content-secondary: #181825;
+            --border: #313244;
+            --border-light: #262637;
+            --text-primary: #cdd6f4;
+            --text-secondary: #a6adc8;
+            --text-muted: #6c7086;
+            --accent-light: rgba(109,94,245,0.18);
+            --danger-light: rgba(229,83,75,0.12);
+        }
+
+        html.dark #hljs-theme { display: none; }
+
+        /* ── Reset ──────────────────────────────────────────────── */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: var(--font);
             display: flex;
             height: 100vh;
-            background: #f5f5f5;
+            background: var(--content-bg);
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
         }
 
+        /* ── Sidebar ────────────────────────────────────────────── */
         .sidebar {
-            width: 300px;
-            background: white;
-            border-right: 1px solid #e0e0e0;
+            width: var(--sidebar-width);
+            background: var(--sidebar-bg);
             display: flex;
             flex-direction: column;
+            flex-shrink: 0;
+            border-right: 1px solid var(--sidebar-border);
         }
 
         .sidebar-header {
-            padding: 20px;
-            border-bottom: 1px solid #e0e0e0;
+            padding: 14px 12px 10px;
+            border-bottom: 1px solid var(--sidebar-border);
         }
 
-        .sidebar-header h1 {
-            font-size: 24px;
+        .sidebar-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
             margin-bottom: 10px;
         }
 
-        .new-note-btn {
-            width: 100%;
-            padding: 10px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .new-note-btn:hover {
-            background: #0056b3;
-        }
-
-        .sidebar-actions {
+        .sidebar-top h1 {
+            font-size: 15px;
+            font-weight: 700;
+            color: #fff;
             display: flex;
-            gap: 8px;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .sidebar-top h1::before {
+            content: '';
+            width: 7px;
+            height: 7px;
+            background: var(--accent);
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .sidebar-header-btns {
+            display: flex;
+            gap: 6px;
+        }
+
+        .icon-btn {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--sidebar-border);
+            border-radius: var(--radius-sm);
+            background: rgba(255,255,255,0.05);
+            cursor: pointer;
+            font-size: 13px;
+            color: var(--sidebar-muted);
+            transition: all 0.12s;
+        }
+
+        .icon-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+        .sidebar-toolbar {
+            display: flex;
+            gap: 6px;
+            align-items: center;
         }
 
         .graph-btn {
             flex: 1;
-            padding: 10px;
-            background: #6c757d;
-            color: white;
-            border: none;
-            border-radius: 4px;
+            padding: 6px 10px;
+            background: rgba(255,255,255,0.06);
+            color: var(--sidebar-text);
+            border: 1px solid var(--sidebar-border);
+            border-radius: var(--radius-sm);
             cursor: pointer;
-            font-size: 14px;
+            font-size: 12px;
+            font-weight: 500;
+            font-family: var(--font);
+            transition: all 0.12s;
+            white-space: nowrap;
         }
 
-        .graph-btn:hover {
-            background: #5a6268;
+        .graph-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+        .sort-select {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--sidebar-border);
+            border-radius: var(--radius-sm);
+            color: var(--sidebar-muted);
+            font-size: 11.5px;
+            font-family: var(--font);
+            padding: 4px 6px;
+            cursor: pointer;
+            outline: none;
+            transition: color 0.12s;
         }
 
+        .sort-select:hover { color: var(--sidebar-text); }
+        .sort-select option { background: #1e1e2e; color: #cdd6f4; }
+
+        /* ── Search ─────────────────────────────────────────────── */
         .search-box {
-            padding: 10px 20px;
-            border-bottom: 1px solid #e0e0e0;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--sidebar-border);
             position: relative;
         }
 
         .search-input {
             width: 100%;
-            padding: 8px 32px 8px 12px;
-            border: 1px solid #e0e0e0;
-            border-radius: 4px;
-            font-size: 14px;
+            padding: 7px 10px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid var(--sidebar-border);
+            border-radius: var(--radius-sm);
+            font-size: 12.5px;
+            font-family: var(--font);
+            color: var(--sidebar-text);
             outline: none;
+            transition: border-color 0.15s, background 0.15s;
         }
 
-        .search-input:focus {
-            border-color: #007bff;
-        }
-
-        .search-clear {
-            position: absolute;
-            right: 28px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            color: #999;
-            cursor: pointer;
-            font-size: 18px;
-            padding: 4px;
-            display: none;
-        }
-
-        .search-clear:hover {
-            color: #333;
-        }
-
-        .search-clear.visible {
-            display: block;
-        }
+        .search-input::placeholder { color: var(--sidebar-muted); }
+        .search-input:focus { border-color: var(--accent); background: rgba(255,255,255,0.09); }
 
         .search-results-info {
-            padding: 8px 20px;
-            font-size: 12px;
-            color: #666;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
+            padding: 5px 12px;
+            font-size: 11px;
+            color: var(--sidebar-muted);
+            border-bottom: 1px solid var(--sidebar-border);
         }
 
+        /* ── Notes List ─────────────────────────────────────────── */
         .notes-list {
             flex: 1;
             overflow-y: auto;
-            padding: 10px;
+            padding: 6px 6px;
+        }
+
+        .notes-list::-webkit-scrollbar { width: 4px; }
+        .notes-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+        .list-section-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            color: var(--sidebar-muted);
+            padding: 10px 6px 4px;
         }
 
         .note-item {
-            padding: 12px;
-            margin-bottom: 5px;
-            background: #f8f9fa;
-            border-radius: 4px;
+            padding: 8px 8px;
+            margin-bottom: 1px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.1s;
+            border-left: 2px solid transparent;
         }
 
-        .note-item:hover {
-            background: #e9ecef;
-        }
+        .note-item:hover { background: var(--sidebar-hover); }
 
         .note-item.active {
-            background: #007bff;
-            color: white;
+            background: var(--sidebar-active-bg);
+            border-left-color: var(--sidebar-active-border);
         }
 
         .note-item-title {
+            font-size: 12.5px;
             font-weight: 500;
-            margin-bottom: 4px;
+            color: var(--sidebar-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
         }
+
+        .note-item.active .note-item-title { color: var(--sidebar-active-text); }
 
         .note-item-date {
-            font-size: 12px;
-            color: #666;
+            font-size: 10.5px;
+            color: var(--sidebar-muted);
         }
 
-        .note-item.active .note-item-date {
-            color: #cce5ff;
-        }
+        .note-item.active .note-item-date { color: rgba(168,156,255,0.55); }
 
-        .editor-container {
+        /* ── Multi-Pane ─────────────────────────────────────────── */
+        .panes-wrapper {
+            display: flex;
             flex: 1;
+            overflow: hidden;
+        }
+
+        .note-pane {
+            flex: 1;
+            min-width: 0;
+            max-width: none;
             display: flex;
             flex-direction: column;
-            background: white;
+            border-right: 1px solid var(--border);
+            overflow: hidden;
+            background: var(--content-bg);
         }
 
-        .editor-header {
-            padding: 20px;
-            border-bottom: 1px solid #e0e0e0;
+        .note-pane:last-child { border-right: none; max-width: unset; }
+
+        .pane-topbar {
+            padding: 7px 12px;
+            border-bottom: 1px solid var(--border);
             display: flex;
-            justify-content: space-between;
             align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+            background: var(--content-secondary);
         }
 
-        .editor-actions {
+        .pane-nav-btn {
+            width: 24px;
+            height: 24px;
             display: flex;
-            gap: 10px;
-        }
-
-        .btn {
-            padding: 8px 16px;
-            border: 1px solid #ddd;
-            background: white;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .btn:hover {
-            background: #f8f9fa;
-        }
-
-        .btn-danger {
-            color: #dc3545;
-            border-color: #dc3545;
-        }
-
-        .btn-danger:hover {
-            background: #dc3545;
-            color: white;
-        }
-
-        .editor-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .editor-title {
-            width: 100%;
-            font-size: 32px;
-            font-weight: bold;
-            border: none;
-            padding: 20px 20px 10px;
-            outline: none;
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .editor-split {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .editor-pane {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .editor-pane-header {
-            padding: 10px 20px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: #666;
-        }
-
-        .editor-body {
-            flex: 1;
-            border: none;
-            padding: 20px;
-            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-            font-size: 14px;
-            line-height: 1.8;
-            resize: none;
-            outline: none;
-            overflow-y: auto;
-        }
-
-        .preview-pane {
-            flex: 1;
-            border-left: 1px solid #e0e0e0;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .preview-content {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            font-size: 15px;
-            line-height: 1.8;
-        }
-
-        /* Markdown preview styling */
-        .preview-content h1 {
-            font-size: 2em;
-            margin-top: 0.5em;
-            margin-bottom: 0.5em;
-            border-bottom: 1px solid #e0e0e0;
-            padding-bottom: 0.3em;
-        }
-
-        .preview-content h2 {
-            font-size: 1.5em;
-            margin-top: 0.5em;
-            margin-bottom: 0.5em;
-            border-bottom: 1px solid #f0f0f0;
-            padding-bottom: 0.3em;
-        }
-
-        .preview-content h3 {
-            font-size: 1.25em;
-            margin-top: 0.5em;
-            margin-bottom: 0.5em;
-        }
-
-        .preview-content p {
-            margin-bottom: 1em;
-        }
-
-        .preview-content ul, .preview-content ol {
-            margin-bottom: 1em;
-            padding-left: 2em;
-        }
-
-        .preview-content li {
-            margin-bottom: 0.25em;
-        }
-
-        .preview-content code {
-            background: #f6f8fa;
-            padding: 0.2em 0.4em;
-            border-radius: 3px;
-            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-            font-size: 85%;
-        }
-
-        .preview-content pre {
-            background: #f6f8fa;
-            padding: 16px;
-            border-radius: 6px;
-            overflow-x: auto;
-            margin-bottom: 1em;
-        }
-
-        .preview-content pre code {
-            background: none;
-            padding: 0;
-            font-size: 13px;
-        }
-
-        .preview-content blockquote {
-            border-left: 4px solid #ddd;
-            padding-left: 1em;
-            color: #666;
-            margin: 1em 0;
-        }
-
-        .preview-content a {
-            color: #007bff;
-            text-decoration: none;
-        }
-
-        .preview-content a:hover {
-            text-decoration: underline;
-        }
-
-        .preview-content a.wikilink {
-            color: #007bff;
-            background: #f0f7ff;
-            padding: 2px 6px;
-            border-radius: 4px;
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .preview-content a.wikilink:hover {
-            background: #007bff;
-            color: white;
-        }
-
-        .preview-content a.wikilink.broken {
-            color: #dc3545;
-            background: #fff0f0;
-            border: 1px dashed #dc3545;
-        }
-
-        .preview-content a.wikilink.broken:hover {
-            background: #dc3545;
-            color: white;
-        }
-
-        .preview-content table {
-            border-collapse: collapse;
-            width: 100%;
-            margin-bottom: 1em;
-        }
-
-        .preview-content th, .preview-content td {
-            border: 1px solid #ddd;
-            padding: 8px 12px;
-            text-align: left;
-        }
-
-        .preview-content th {
-            background: #f6f8fa;
-            font-weight: 600;
-        }
-
-        .preview-content img {
-            max-width: 100%;
-            height: auto;
-        }
-
-        /* Graph View Styles */
-        .graph-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: white;
-            overflow: hidden;
-        }
-
-        .graph-header {
-            padding: 15px 20px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .graph-header h2 {
-            font-size: 18px;
-            color: #333;
-        }
-
-        .graph-canvas {
-            flex: 1;
-            background: #fafbfc;
-            cursor: grab;
-        }
-
-        .graph-canvas:active {
-            cursor: grabbing;
-        }
-
-        .graph-node {
-            cursor: pointer;
-        }
-
-        .graph-node circle {
-            fill: #007bff;
-            stroke: #fff;
-            stroke-width: 2px;
-            transition: all 0.2s;
-        }
-
-        .graph-node:hover circle {
-            fill: #0056b3;
-            r: 15;
-        }
-
-        .graph-node text {
-            font-size: 12px;
-            fill: #333;
-            pointer-events: auto;
-            text-shadow: 0 1px 3px rgba(255,255,255,0.8);
-        }
-
-        .graph-link {
-            stroke: #adb5bd;
-            stroke-width: 1.5px;
-            opacity: 0.6;
-        }
-
-        .empty-state {
-            display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100%;
-            color: #999;
+            border: none;
+            border-radius: 4px;
+            background: transparent;
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-family: var(--font);
+            transition: all 0.1s;
+            flex-shrink: 0;
         }
 
-        .empty-state h2 {
+        .pane-nav-btn:hover:not(:disabled) { background: var(--border-light); color: var(--text-primary); }
+        .pane-nav-btn:disabled { opacity: 0.28; cursor: not-allowed; }
+
+        .pane-title-label {
+            flex: 1;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+        }
+
+        .pane-topbar-actions { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
+
+        .pane-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 36px 44px 48px;
+        }
+
+        .pane-body::-webkit-scrollbar { width: 5px; }
+        .pane-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .pane-note-title {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.4px;
+            line-height: 1.2;
+            color: var(--text-primary);
             margin-bottom: 10px;
         }
 
-        /* Tags display */
-        .tags-display {
-            padding: 10px 20px;
-            border-bottom: 1px solid #e0e0e0;
-            min-height: 40px;
-        }
-
-        .tag {
-            display: inline-block;
-            background: #e9ecef;
-            color: #495057;
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            margin-right: 8px;
-            margin-bottom: 5px;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .tag:hover {
-            background: #007bff;
-            color: white;
-        }
-
-        /* Editor with sidebar layout */
-        .editor-with-sidebar {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .editor-with-sidebar .editor-split {
-            flex: 1;
-        }
-
-        /* Backlinks sidebar */
-        .backlinks-sidebar {
-            width: 250px;
-            border-left: 1px solid #e0e0e0;
-            background: #fafafa;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .backlinks-header {
-            padding: 12px 16px;
-            background: #f8f9fa;
-            border-bottom: 1px solid #e0e0e0;
-            font-size: 13px;
-            font-weight: 600;
-            color: #495057;
-        }
-
-        .backlinks-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px 0;
-        }
-
-        .backlinks-section {
+        .pane-body .tags-display {
+            padding: 0;
+            border: none;
             margin-bottom: 16px;
+            min-height: unset;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
         }
 
-        .backlinks-section-title {
-            padding: 8px 16px;
-            font-size: 11px;
+        .pane-body .preview-content { padding: 0; }
+
+        /* ── Table of Contents ──────────────────────────────────── */
+        .pane-toc {
+            background: var(--content-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 10px 14px;
+            margin-bottom: 24px;
+            font-size: 13px;
+        }
+
+        .pane-toc-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .pane-toc-label {
+            font-size: 10.5px;
             font-weight: 600;
             text-transform: uppercase;
-            color: #6c757d;
+            letter-spacing: 0.6px;
+            color: var(--text-muted);
+        }
+
+        .pane-toc-arrow { font-size: 10px; color: var(--text-muted); transition: transform 0.18s; }
+        .pane-toc.collapsed .pane-toc-arrow { transform: rotate(-90deg); }
+
+        .pane-toc-list { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+        .pane-toc.collapsed .pane-toc-list { display: none; }
+
+        .toc-item {
+            color: var(--text-secondary);
+            font-size: 13px;
+            padding: 2px 0;
+            cursor: pointer;
+            text-decoration: none;
+            display: block;
+            transition: color 0.1s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .toc-item:hover { color: var(--accent); }
+        .toc-item[data-level="2"] { padding-left: 12px; }
+        .toc-item[data-level="3"] { padding-left: 24px; font-size: 12.5px; }
+        .toc-item[data-level="4"] { padding-left: 36px; font-size: 12px; color: var(--text-muted); }
+
+        /* ── Backlinks (in pane) ────────────────────────────────── */
+        .pane-backlinks-section {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-light);
+        }
+
+        .pane-backlinks-title {
+            font-size: 10.5px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .backlinks-section { margin-bottom: 12px; }
+
+        .backlinks-section-title {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
             letter-spacing: 0.5px;
+            color: var(--text-muted);
+            padding: 0 0 4px;
         }
 
         .backlink-item {
-            padding: 8px 16px;
+            padding: 6px 0;
             cursor: pointer;
+            border-left: 2px solid transparent;
+            padding-left: 8px;
+            margin-left: -8px;
+            transition: all 0.1s;
+        }
+
+        .backlink-item:hover { border-left-color: var(--accent); }
+
+        .backlink-title { font-size: 12.5px; color: var(--text-secondary); }
+        .backlink-item:hover .backlink-title { color: var(--accent); }
+        .backlink-item.broken .backlink-title { color: var(--text-muted); font-style: italic; }
+
+        .no-backlinks { font-size: 12.5px; color: var(--text-muted); }
+
+        /* ── Tags ───────────────────────────────────────────────── */
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            background: var(--accent-light);
+            color: var(--accent);
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11.5px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.12s;
+        }
+
+        .tag:hover { background: var(--accent); color: white; }
+
+        /* ── Preview (markdown) ─────────────────────────────────── */
+        .preview-content { font-size: 14.5px; line-height: 1.75; color: var(--text-primary); }
+
+        .preview-content h1 {
+            font-size: 1.75em; font-weight: 700; margin: 0.5em 0 0.4em;
+            border-bottom: 2px solid var(--border-light); padding-bottom: 0.25em;
+            letter-spacing: -0.3px;
+        }
+
+        .preview-content h2 {
+            font-size: 1.3em; font-weight: 600; margin: 0.9em 0 0.4em;
+            border-bottom: 1px solid var(--border-light); padding-bottom: 0.2em;
+        }
+
+        .preview-content h3 { font-size: 1.1em; font-weight: 600; margin: 0.8em 0 0.35em; }
+        .preview-content h4 { font-size: 1em; font-weight: 600; margin: 0.7em 0 0.3em; }
+        .preview-content p { margin-bottom: 0.85em; }
+        .preview-content ul, .preview-content ol { margin-bottom: 0.85em; padding-left: 1.6em; }
+        .preview-content li { margin-bottom: 0.2em; }
+
+        .preview-content code {
+            background: var(--accent-light); color: var(--accent);
+            padding: 0.15em 0.4em; border-radius: 4px;
+            font-family: var(--font-mono); font-size: 84%;
+        }
+
+        .preview-content pre {
+            background: #1e1e2e; padding: 16px 20px; border-radius: var(--radius-md);
+            overflow-x: auto; margin-bottom: 1em; box-shadow: var(--shadow-sm);
+        }
+
+        .preview-content pre code { background: none; color: #cdd6f4; padding: 0; font-size: 13px; }
+
+        .preview-content blockquote {
+            border-left: 3px solid var(--accent); padding: 8px 14px;
+            color: var(--text-secondary); margin: 1em 0;
+            background: var(--accent-light);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        }
+
+        .preview-content a { color: var(--accent); text-decoration: none; }
+        .preview-content a:hover { text-decoration: underline; }
+
+        .preview-content a.wikilink {
+            color: var(--accent); background: var(--accent-light);
+            padding: 1px 6px; border-radius: 4px; font-weight: 500;
+            font-size: 13.5px; transition: all 0.12s; cursor: pointer;
+        }
+
+        .preview-content a.wikilink:hover { background: var(--accent); color: white; text-decoration: none; }
+
+        .preview-content a.wikilink.broken {
+            color: var(--danger); background: var(--danger-light);
+            border: 1px dashed var(--danger);
+        }
+
+        .preview-content a.wikilink.broken:hover { background: var(--danger); color: white; }
+
+        .preview-content table { border-collapse: collapse; width: 100%; margin-bottom: 1em; font-size: 13.5px; }
+        .preview-content th, .preview-content td { border: 1px solid var(--border); padding: 7px 12px; text-align: left; }
+        .preview-content th { background: var(--content-secondary); font-weight: 600; }
+        .preview-content tr:hover td { background: var(--border-light); }
+        .preview-content img { max-width: 100%; height: auto; border-radius: var(--radius-md); }
+        .preview-content hr { border: none; border-top: 2px solid var(--border-light); margin: 1.5em 0; }
+
+        /* ── Buttons ────────────────────────────────────────────── */
+        .btn {
+            padding: 5px 12px;
+            border: 1px solid var(--border);
+            background: var(--content-bg);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 12.5px;
+            font-weight: 500;
+            font-family: var(--font);
+            color: var(--text-secondary);
+            transition: all 0.12s;
+        }
+
+        .btn:hover { background: var(--content-secondary); color: var(--text-primary); }
+
+        .btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+        .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: white; }
+
+        .btn-danger { color: var(--danger); border-color: transparent; }
+        .btn-danger:hover { background: var(--danger-light); border-color: var(--danger); }
+
+        .btn-icon {
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: transparent;
+            cursor: pointer; color: var(--text-muted); font-size: 14px;
+            font-family: var(--font);
+            transition: all 0.12s;
+        }
+
+        .btn-icon:hover { background: var(--content-secondary); color: var(--text-primary); }
+
+        /* ── Export menu ────────────────────────────────────────── */
+        .export-wrap { position: relative; }
+
+        .export-menu {
+            position: absolute; top: calc(100% + 5px); right: 0;
+            background: var(--content-bg); border: 1px solid var(--border);
+            border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+            min-width: 130px; z-index: 400; overflow: hidden;
+            display: none;
+        }
+
+        .export-wrap.open .export-menu { display: block; }
+
+        .export-item {
+            display: block; width: 100%; padding: 8px 13px;
+            font-size: 12.5px; font-family: var(--font);
+            color: var(--text-primary); background: transparent;
+            border: none; text-align: left; cursor: pointer;
+            transition: background 0.1s;
+        }
+
+        .export-item:hover { background: var(--border-light); }
+
+        /* ── Empty State ────────────────────────────────────────── */
+        .empty-state {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            height: 100%; color: var(--text-muted);
+            text-align: center; gap: 10px;
+        }
+
+        .empty-state h2 { font-size: 18px; font-weight: 600; color: var(--text-secondary); }
+        .empty-state p { font-size: 13.5px; }
+
+        /* ── Editor Modal ───────────────────────────────────────── */
+        .modal-overlay {
+            position: fixed; inset: 0;
+            background: rgba(10,10,20,0.55);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 1000; backdrop-filter: blur(6px);
+            animation: fadeIn 0.15s ease;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .modal-editor {
+            width: 88vw; height: 86vh;
+            background: var(--content-bg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            animation: scaleIn 0.16s ease;
+        }
+
+        @keyframes scaleIn { from { transform: scale(0.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .modal-header {
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+        }
+
+        .modal-title-input {
+            flex: 1; font-size: 16px; font-weight: 600;
+            border: none; outline: none;
+            font-family: var(--font); color: var(--text-primary);
+            background: transparent;
+        }
+
+        .modal-actions { display: flex; gap: 8px; align-items: center; }
+
+        .modal-body { flex: 1; display: flex; overflow: hidden; }
+
+        /* ── Editor panes ───────────────────────────────────────── */
+        .editor-split { display: flex; flex: 1; overflow: hidden; }
+
+        .editor-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        .editor-pane-header {
+            padding: 7px 18px;
+            background: var(--content-secondary); border-bottom: 1px solid var(--border-light);
+            font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+            color: var(--text-muted); letter-spacing: 0.6px;
+        }
+
+        .editor-body {
+            flex: 1; border: none; padding: 18px 22px;
+            font-family: var(--font-mono); font-size: 13.5px; line-height: 1.75;
+            resize: none; outline: none; overflow-y: auto;
+            color: var(--text-primary); background: var(--content-bg);
+        }
+
+        .editor-body::-webkit-scrollbar { width: 5px; }
+        .editor-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .preview-pane { flex: 1; border-left: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+
+        .preview-pane .preview-content { flex: 1; padding: 18px 24px; overflow-y: auto; }
+
+        /* ── Command Palette ────────────────────────────────────── */
+        .cmd-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            display: flex; align-items: flex-start; justify-content: center;
+            padding-top: 14vh;
+            animation: fadeIn 0.12s ease;
+        }
+
+        .cmd-palette {
+            width: 560px; max-width: 90vw;
+            background: var(--content-bg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .cmd-input-wrap {
+            display: flex; align-items: center; gap: 10px;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .cmd-icon { font-size: 15px; color: var(--text-muted); flex-shrink: 0; }
+
+        .cmd-input {
+            flex: 1; font-size: 15px; font-family: var(--font);
+            border: none; outline: none;
+            background: transparent; color: var(--text-primary);
+        }
+
+        .cmd-input::placeholder { color: var(--text-muted); }
+
+        .cmd-results { max-height: 340px; overflow-y: auto; }
+        .cmd-results::-webkit-scrollbar { width: 4px; }
+        .cmd-results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        .cmd-item {
+            display: flex; align-items: center; gap: 10px;
+            padding: 10px 18px; cursor: pointer;
+            transition: background 0.08s;
+        }
+
+        .cmd-item:hover, .cmd-item.selected { background: var(--accent-dim); }
+        .cmd-item.selected .cmd-item-title { color: var(--accent); }
+
+        .cmd-item-icon { font-size: 14px; opacity: 0.5; flex-shrink: 0; }
+        .cmd-item-title { flex: 1; font-size: 13.5px; color: var(--text-primary); }
+        .cmd-item-date { font-size: 11px; color: var(--text-muted); }
+
+        .cmd-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+        .cmd-footer {
+            padding: 8px 18px;
+            border-top: 1px solid var(--border);
+            display: flex; gap: 16px;
+            font-size: 11.5px; color: var(--text-muted);
+        }
+
+        .cmd-hint { display: flex; align-items: center; gap: 5px; }
+
+        .cmd-key {
+            background: var(--border-light); border: 1px solid var(--border);
+            border-radius: 3px; padding: 1px 5px; font-size: 10.5px;
+            font-family: var(--font-mono); color: var(--text-secondary);
+        }
+
+        /* ── Hover Preview ──────────────────────────────────────── */
+        .wikilink-preview {
+            position: fixed; z-index: 3000;
+            background: var(--content-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            padding: 12px 15px;
+            max-width: 300px; min-width: 200px;
+            pointer-events: none;
+            opacity: 0; transition: opacity 0.15s;
+        }
+
+        .wikilink-preview.visible { opacity: 1; }
+
+        .wp-title { font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 5px; }
+        .wp-excerpt { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+
+        /* ── Graph ──────────────────────────────────────────────── */
+        .graph-container { flex: 1; display: flex; flex-direction: column; background: var(--content-bg); overflow: hidden; }
+
+        .graph-header {
+            padding: 12px 18px; background: var(--content-bg);
+            border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .graph-header h2 { font-size: 14px; font-weight: 600; }
+
+        .graph-canvas { flex: 1; background: #0d0d1a; cursor: grab; }
+        .graph-canvas:active { cursor: grabbing; }
+        .graph-node { cursor: pointer; }
+        .graph-node circle { fill: var(--accent); stroke: rgba(255,255,255,0.15); stroke-width: 2px; transition: all 0.2s; }
+        .graph-node:hover circle { fill: #a89cff; }
+        .graph-node text { font-size: 11px; fill: rgba(255,255,255,0.7); font-family: var(--font); }
+        .graph-link { stroke: rgba(109,94,245,0.3); stroke-width: 1.5px; }
+
+        /* ── Notifications ──────────────────────────────────────── */
+        @keyframes slideInRight { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(110%); opacity: 0; } }
+
+        /* ── Resize handles ─────────────────────────────────────── */
+        .pane-resize-handle {
+            flex: 0 0 5px;
+            width: 5px;
+            background: transparent;
+            cursor: col-resize;
+            position: relative;
+            z-index: 10;
             transition: background 0.15s;
-            border-left: 3px solid transparent;
         }
 
-        .backlink-item:hover {
-            background: #f0f0f0;
-            border-left-color: #007bff;
+        .pane-resize-handle:hover,
+        .pane-resize-handle.dragging {
+            background: var(--accent);
         }
 
-        .backlink-item.broken {
-            color: #6c757d;
-            font-style: italic;
+        .pane-resize-handle::after {
+            content: '';
+            position: absolute;
+            inset: 0 -4px;  /* widen hit area */
         }
 
-        .backlink-title {
+        .editor-resize-handle {
+            width: 5px;
+            flex-shrink: 0;
+            background: var(--border);
+            cursor: col-resize;
+            position: relative;
+            z-index: 10;
+            transition: background 0.15s;
+        }
+
+        .editor-resize-handle:hover,
+        .editor-resize-handle.dragging {
+            background: var(--accent);
+        }
+
+        .editor-resize-handle::after {
+            content: '';
+            position: absolute;
+            inset: 0 -4px;
+        }
+
+        .sidebar-resize-handle {
+            width: 4px;
+            flex-shrink: 0;
+            background: transparent;
+            cursor: col-resize;
+            position: relative;
+            z-index: 20;
+            transition: background 0.15s;
+        }
+
+        .sidebar-resize-handle:hover,
+        .sidebar-resize-handle.dragging {
+            background: var(--accent);
+        }
+
+        .sidebar-resize-handle::after {
+            content: '';
+            position: absolute;
+            inset: 0 -4px;
+        }
+
+        /* Prevent text selection while dragging */
+        body.resizing { user-select: none; cursor: col-resize; }
+
+        /* ── Minimized pane ─────────────────────────────────────── */
+        .note-pane.minimized {
+            flex: 0 0 40px !important;
+            min-width: 40px !important;
+            max-width: 40px !important;
+        }
+
+        .note-pane.minimized .pane-body { display: none; }
+
+        .note-pane.minimized .pane-topbar {
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 10px 0;
+            height: 100%;
+            overflow: hidden;
+            gap: 10px;
+            border-right: 1px solid var(--border);
+        }
+
+        .note-pane.minimized .pane-nav-btn,
+        .note-pane.minimized .pane-topbar-actions > :not(.minimize-btn) {
+            display: none;
+        }
+
+        .note-pane.minimized .pane-title-label {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            flex: 1;
+            max-height: 180px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 11.5px;
+            color: var(--text-secondary);
+            min-width: unset;
+        }
+
+        .minimize-btn {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            border-radius: 4px;
+            background: transparent;
+            cursor: pointer;
+            color: var(--text-muted);
             font-size: 13px;
-            line-height: 1.4;
+            transition: all 0.1s;
+            flex-shrink: 0;
         }
 
-        .backlink-item.broken .backlink-title::after {
-            content: " (create)";
-            color: #dc3545;
+        .minimize-btn:hover { background: var(--border-light); color: var(--text-primary); }
+
+        /* ── Star button ────────────────────────────────────────── */
+        .star-btn {
+            width: 24px; height: 24px;
+            display: flex; align-items: center; justify-content: center;
+            border: none; border-radius: 4px;
+            background: transparent; cursor: pointer;
+            font-size: 14px; transition: transform 0.12s, color 0.12s;
+            color: var(--text-muted); line-height: 1;
+        }
+        .star-btn:hover { color: var(--text-primary); transform: scale(1.15); }
+        .star-btn.starred { color: #f5a623; }
+
+        /* ── Pane footer ─────────────────────────────────────────── */
+        .pane-footer {
+            padding: 6px 44px;
+            border-top: 1px solid var(--border-light);
             font-size: 11px;
+            color: var(--text-muted);
+            display: flex; gap: 10px; align-items: center;
+            flex-shrink: 0;
+            background: var(--content-secondary);
         }
 
-        .no-backlinks {
-            padding: 20px 16px;
-            text-align: center;
-            color: #999;
-            font-size: 13px;
+        /* ── Zen / focus mode ────────────────────────────────────── */
+        body.zen .sidebar { flex: 0 0 0 !important; min-width: 0 !important; overflow: hidden !important; border: none !important; }
+        body.zen #sidebarResizeHandle { display: none !important; }
+        body.zen .pane-topbar { opacity: 0.08; transition: opacity 0.2s; }
+        body.zen .note-pane:hover .pane-topbar { opacity: 1; }
+        body.zen .pane-body { padding-left: 10%; padding-right: 10%; max-width: 900px; margin: 0 auto; }
+
+        /* ── Shortcuts modal ─────────────────────────────────────── */
+        .shortcuts-overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.52); backdrop-filter: blur(8px);
+            z-index: 2000; display: flex; align-items: center; justify-content: center;
+            animation: fadeIn 0.12s ease;
+        }
+        .shortcuts-modal {
+            background: var(--content-bg); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+            width: 460px; max-width: 92vw; max-height: 80vh; overflow-y: auto;
+            padding: 22px 26px;
+        }
+        .shortcuts-modal h2 { font-size: 14px; font-weight: 700; margin-bottom: 16px; color: var(--text-primary); }
+        .shortcuts-group { margin-bottom: 16px; }
+        .shortcuts-group-title {
+            font-size: 10px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.7px; color: var(--text-muted); margin-bottom: 7px;
+        }
+        .shortcut-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 5px 0; border-bottom: 1px solid var(--border-light);
+        }
+        .shortcut-row:last-child { border-bottom: none; }
+        .shortcut-desc { font-size: 12.5px; color: var(--text-secondary); }
+        .shortcut-keys { display: flex; gap: 3px; align-items: center; }
+        .shortcut-key {
+            background: var(--border-light); border: 1px solid var(--border);
+            border-radius: 3px; padding: 1px 6px; font-size: 11px;
+            font-family: var(--font-mono); color: var(--text-secondary); white-space: nowrap;
         }
 
-        .loading {
-            padding: 20px;
-            text-align: center;
-            color: #999;
-        }
+        /* ── Search highlight ────────────────────────────────────── */
+        mark.sh { background: rgba(109,94,245,0.22); color: var(--accent); border-radius: 2px; font-weight: 500; font-style: normal; }
 
-        /* Animations */
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-
-        @keyframes slideOut {
-            from {
-                transform: translateX(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateX(100%);
-                opacity: 0;
-            }
+        /* ── Print ──────────────────────────────────────────────── */
+        @media print {
+            .sidebar, .pane-topbar, .pane-backlinks-section, .pane-toc { display: none !important; }
+            .panes-wrapper { display: block !important; overflow: visible !important; }
+            .note-pane { border: none !important; min-width: 100% !important; max-width: 100% !important; display: block !important; }
+            .pane-body { padding: 0 !important; overflow: visible !important; height: auto !important; }
         }
     </style>
 </head>
 <body>
-    <div class="sidebar">
-        <div class="sidebar-header">
+
+<!-- ── Sidebar ─────────────────────────────────────────────── -->
+<div class="sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-top">
             <h1>Synote</h1>
-            <div class="sidebar-actions">
-                <!-- READ-ONLY: button class="new-note-btn" onclick="createNewNote()">+ New Note</button -->
-                <button class="graph-btn" onclick="showGraphView()">🕸️ Graph</button
+            <div class="sidebar-header-btns">
+                <button class="icon-btn" onclick="showShortcutsModal()" title="Keyboard shortcuts (?)">⌨</button>
+                <button class="icon-btn" id="zenToggle" onclick="toggleZenMode()" title="Zen mode (⌘.)">◎</button>
+                <button class="icon-btn" id="darkToggle" onclick="toggleDarkMode()" title="Toggle dark mode (⌘D)">🌙</button>
             </div>
         </div>
-        <div class="search-box">
-            <input type="text" class="search-input" id="searchInput"
-                   placeholder="Search notes... (Ctrl+K)" oninput="handleSearch()">
-            <!-- READ-ONLY: button class="search-clear" id="searchClear" onclick="clearSearch()">&times;</button -->
-        </div>
-        <div class="search-results-info" id="searchInfo" style="display: none;"></div>
-        <div class="notes-list" id="notesList"></div>
-    </div>
-
-    <div class="editor-container" id="editorContainer">
-        <div class="empty-state">
-            <h2>Welcome to Synote</h2>
-            <p>Create a new note to get started</p>
+        <div class="sidebar-toolbar">
+            <button class="graph-btn" onclick="showGraphView()">⬡ Graph</button>
+            <select class="sort-select" id="sortSelect" onchange="setSortOrder(this.value)" title="Sort notes">
+                <option value="updated">Recent</option>
+                <option value="title">A → Z</option>
+                <option value="created">Created</option>
+                <option value="viewed">Viewed</option>
+            </select>
         </div>
     </div>
+    <div class="search-box">
+        <input type="text" class="search-input" id="searchInput"
+               placeholder="Search notes…" oninput="handleSearch()">
+    </div>
+    <div class="search-results-info" id="searchInfo" style="display:none;"></div>
+    <div class="notes-list" id="notesList"></div>
+</div>
 
-    <script>
-        // Configuration
-        const API_URL = window.location.hostname === 'localhost' 
-            ? 'http://localhost:8080/api' 
-            : `${window.location.origin}/api`;
-        let currentNote = null;
-        let notes = [];
-        let autoSaveTimeout = null;
-        let searchTimeout = null;
-        let isSearching = false;
-        let authToken = localStorage.getItem('synote_token');
+<!-- ── Sidebar resize handle ──────────────────────────────── -->
+<div class="sidebar-resize-handle" id="sidebarResizeHandle"></div>
 
-        // API helper with auth
-        async function apiCall(endpoint, options = {}) {
-            const headers = {
-                'Content-Type': 'application/json',
-                ...options.headers
-            };
-            
-            if (authToken) {
-                headers['Authorization'] = `Bearer ${authToken}`;
-            }
+<!-- ── Panes ──────────────────────────────────────────────── -->
+<div class="panes-wrapper" id="panesContainer">
+    <div class="empty-state">
+        <h2>Welcome to Synote</h2>
+        <p>Click a note in the sidebar to open it<br>
+        <span style="font-size:12px;opacity:0.7;">Press <kbd style="background:var(--border-light);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:monospace;">⌘K</kbd> for command palette</span></p>
+    </div>
+</div>
 
-            const response = await fetch(`${API_URL}${endpoint}`, {
-                ...options,
-                headers
-            });
+<!-- ── Wikilink hover preview (singleton) ─────────────────── -->
+<div class="wikilink-preview" id="wikilinkPreview">
+    <div class="wp-title" id="wpTitle"></div>
+    <div class="wp-excerpt" id="wpExcerpt"></div>
+</div>
 
-            if (response.status === 401) {
-                // Auth required - show login
-                showLoginModal();
-                throw new Error('Authentication required');
-            }
+<script>
+// ════════════════════════════════════════════════════════════
+// State
+// ════════════════════════════════════════════════════════════
+const API_URL = window.location.hostname === 'localhost'
+    ? 'http://localhost:8080/api'
+    : `${window.location.origin}/api`;
 
-            return response;
-        }
+let openPanes    = [];   // [{ uid, note, history:[], historyIdx }]
+let notes        = [];   // sidebar list
+let currentNote  = null;
+let authToken    = localStorage.getItem('synote_token');
+let searchTimeout = null;
+let isSearching  = false;
+let sortOrder    = localStorage.getItem('synote_sort') || 'updated';
+let darkMode     = localStorage.getItem('synote_dark') === 'true';
+let recentlyViewed = JSON.parse(localStorage.getItem('synote_recent') || '[]'); // [{id,title}]
+let starredNotes = new Set(JSON.parse(localStorage.getItem('synote_starred') || '[]'));
+let zenMode = false;
+const noteCache  = new Map(); // noteId -> full note object
+const MAX_PANES  = 5;
 
-        function showLoginModal() {
-            // Check if modal already exists
-            if (document.getElementById('loginModal')) return;
+// ════════════════════════════════════════════════════════════
+// Init
+// ════════════════════════════════════════════════════════════
+function init() {
+    applyDarkMode();
+    document.getElementById('sortSelect').value = sortOrder;
+    initSidebarResize();
+    loadNotes();
+}
 
-            const modal = document.createElement('div');
-            modal.id = 'loginModal';
-            modal.innerHTML = `
-                <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000;">
-                    <div style="background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); width: 400px; max-width: 90%;">
-                        <h2 style="margin-bottom: 20px; font-size: 20px;">Authentication Required</h2>
-                        <p style="margin-bottom: 20px; color: #666; font-size: 14px;">Please enter your Synote access token to continue.</p>
-                        <input type="password" id="tokenInput" placeholder="Enter token..." style="width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 14px;">
-                        <div style="display: flex; gap: 10px;">
-                            <!-- READ-ONLY: button onclick="submitToken()" style="flex: 1; padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Login</button -->
-                            <!-- READ-ONLY: button onclick="closeLoginModal()" style="flex: 1; padding: 12px; background: #e0e0e0; color: #333; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">Cancel</button -->
-                        </div>
-                        <p id="loginError" style="margin-top: 15px; color: #dc3545; font-size: 14px; display: none;"></p>
-                    </div>
+// ════════════════════════════════════════════════════════════
+// Dark Mode
+// ════════════════════════════════════════════════════════════
+function applyDarkMode() {
+    document.documentElement.classList.toggle('dark', darkMode);
+    document.getElementById('darkToggle').textContent = darkMode ? '☀️' : '🌙';
+}
+
+function toggleDarkMode() {
+    darkMode = !darkMode;
+    localStorage.setItem('synote_dark', darkMode);
+    applyDarkMode();
+}
+
+// ════════════════════════════════════════════════════════════
+// API
+// ════════════════════════════════════════════════════════════
+async function apiCall(endpoint, options = {}) {
+    const headers = { 'Content-Type': 'application/json', ...options.headers };
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    const res = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+    if (res.status === 401) { showLoginModal(); throw new Error('Auth required'); }
+    return res;
+}
+
+// ════════════════════════════════════════════════════════════
+// Auth
+// ════════════════════════════════════════════════════════════
+function showLoginModal() {
+    if (document.getElementById('loginModal')) return;
+    const modal = document.createElement('div');
+    modal.id = 'loginModal';
+    modal.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:9000;backdrop-filter:blur(6px);">
+            <div style="background:var(--content-bg);padding:30px;border-radius:12px;box-shadow:var(--shadow-lg);width:380px;max-width:90%;border:1px solid var(--border);">
+                <h2 style="margin-bottom:8px;font-size:17px;font-weight:700;color:var(--text-primary);">Authentication Required</h2>
+                <p style="margin-bottom:18px;color:var(--text-secondary);font-size:13px;">Enter your Synote access token.</p>
+                <input type="password" id="tokenInput" placeholder="Enter token…"
+                    style="width:100%;padding:9px 12px;margin-bottom:12px;border:1.5px solid var(--border);border-radius:6px;font-size:14px;outline:none;font-family:inherit;color:var(--text-primary);background:var(--content-bg);">
+                <div style="display:flex;gap:8px;">
+                    <button onclick="submitToken()" style="flex:1;padding:10px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;">Login</button>
+                    <button onclick="document.getElementById('loginModal').remove()" style="flex:1;padding:10px;background:var(--border-light);color:var(--text-secondary);border:none;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;">Cancel</button>
                 </div>
-            `;
-            document.body.appendChild(modal);
+                <p id="loginError" style="margin-top:10px;color:var(--danger);font-size:12.5px;display:none;"></p>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('tokenInput').focus();
+    document.getElementById('tokenInput').onkeypress = e => { if (e.key === 'Enter') submitToken(); };
+}
 
-            // Focus input and handle Enter key
-            document.getElementById('tokenInput').focus();
-            document.getElementById('tokenInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') submitToken();
-            });
-        }
-
-        function closeLoginModal() {
-            const modal = document.getElementById('loginModal');
-            if (modal) modal.remove();
-        }
-
-        async function submitToken() {
-            const input = document.getElementById('tokenInput');
-            const errorDisplay = document.getElementById('loginError');
-            const token = input.value.trim();
-
-            if (!token) {
-                errorDisplay.textContent = 'Please enter a token';
-                errorDisplay.style.display = 'block';
-                return;
-            }
-
-            // Test the token with a health check
-            try {
-                const response = await fetch(`${API_URL}/health`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.ok) {
-                    authToken = token;
-                    localStorage.setItem('synote_token', token);
-                    closeLoginModal();
-                    showNotification('Logged in successfully!', 'success');
-                    loadNotes(); // Reload with auth
-                } else {
-                    errorDisplay.textContent = 'Invalid token. Please try again.';
-                    errorDisplay.style.display = 'block';
-                }
-            } catch (err) {
-                errorDisplay.textContent = 'Connection failed. Check server status.';
-                errorDisplay.style.display = 'block';
-            }
-        }
-
-        function logout() {
-            authToken = null;
-            localStorage.removeItem('synote_token');
-            notes = [];
-            currentNote = null;
-            renderNotesList();
-            document.getElementById('editorContainer').innerHTML = `
-                <div class="empty-state">
-                    <h2>Logged out</h2>
-                    <p>Refresh the page to log in again</p>
-                </div>
-            `;
-            showNotification('Logged out', 'info');
-        }
-
-        async function loadNotes() {
-            try {
-                const response = await apiCall('/notes');
-                if (!response.ok) {
-                    if (response.status === 401 || response.status === 403) {
-                        showLoginModal();
-                        return;
-                    }
-                    throw new Error('Failed to load notes: ' + response.status);
-                }
-                notes = await response.json();
-                renderNotesList();
-            } catch (error) {
-                console.error('Failed to load notes:', error);
-                showLoginModal();
-            }
-        }
-
-        function renderNotesList() {
-            const notesList = document.getElementById('notesList');
-            const searchInfo = document.getElementById('searchInfo');
-
-            if (notes.length === 0 && isSearching) {
-                notesList.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No notes found</div>';
-                return;
-            }
-
-            notesList.innerHTML = notes.map(note => `
-                <div class="note-item ${currentNote?.id === note.id ? 'active' : ''}" onclick="loadNote('${note.id}')">
-                    <div class="note-item-title">${note.title || 'Untitled'}</div>
-                    <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
-                </div>
-            `).join('');
-
-            // Update search info
-            if (isSearching) {
-                searchInfo.style.display = 'block';
-                searchInfo.textContent = `Found ${notes.length} note${notes.length !== 1 ? 's' : ''}`;
-            } else {
-                searchInfo.style.display = 'none';
-            }
-        }
-
-        async function handleSearch() {
-            const searchInput = document.getElementById('searchInput');
-            const searchClear = document.getElementById('searchClear');
-            const query = searchInput.value.trim();
-
-            // Show/hide clear button
-            if (searchInput.value) {
-                searchClear.classList.add('visible');
-            } else {
-                searchClear.classList.remove('visible');
-            }
-
-            // Clear previous timeout
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-            }
-
-            // Debounce search
-            searchTimeout = setTimeout(async () => {
-                if (query === '') {
-                    isSearching = false;
-                    await loadNotes();
-                } else {
-                    isSearching = true;
-                    await performSearch(query);
-                }
-            }, 300);
-        }
-
-        function clearSearch() {
-            const searchInput = document.getElementById('searchInput');
-            const searchClear = document.getElementById('searchClear');
-            searchInput.value = '';
-            searchClear.classList.remove('visible');
-            isSearching = false;
+async function submitToken() {
+    const token = document.getElementById('tokenInput').value.trim();
+    const err = document.getElementById('loginError');
+    if (!token) { err.textContent = 'Please enter a token'; err.style.display = 'block'; return; }
+    try {
+        const res = await fetch(`${API_URL}/health`, { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+            authToken = token;
+            localStorage.setItem('synote_token', token);
+            document.getElementById('loginModal').remove();
+            showNotification('Logged in!', 'success');
             loadNotes();
+        } else {
+            err.textContent = 'Invalid token.'; err.style.display = 'block';
         }
+    } catch { err.textContent = 'Connection failed.'; err.style.display = 'block'; }
+}
 
-        async function performSearch(query) {
-            try {
-                const response = await fetch(`${API_URL}/search?q=${encodeURIComponent(query)}`);
-                notes = await response.json();
-                renderNotesList();
-            } catch (error) {
-                console.error('Search failed:', error);
-                showNotification('Search failed', 'error');
-            }
-        }
+// ════════════════════════════════════════════════════════════
+// Notes list & sorting
+// ════════════════════════════════════════════════════════════
+async function loadNotes() {
+    try {
+        const res = await apiCall('/notes');
+        if (!res.ok) { if (res.status === 401 || res.status === 403) { showLoginModal(); return; } return; }
+        notes = await res.json();
+        renderNotesList();
+    } catch { showLoginModal(); }
+}
 
-                // Update backlinks display
-        async function updateBacklinks(content) {
-            const backlinksDisplay = document.getElementById('backlinksDisplay');
-            if (!backlinksDisplay) return;
-            
-            // Extract wikilinks from content
-            const wikilinkRegex = /\[\[([^\]]+)\]\]/g;
-            const links = [];
-            let match;
-            while ((match = wikilinkRegex.exec(content)) !== null) {
-                links.push(match[1]);
-            }
-            
-            if (links.length === 0) {
-                backlinksDisplay.innerHTML = '';
-                return;
-            }
-            
-            backlinksDisplay.innerHTML = '<div style="color: #666; font-size: 12px; margin-bottom: 5px;">Links to:</div>' + 
-                links.map(link => `<div class="backlink-tag">${escapeHtml(link)}</div>`).join('');
-        }
-
-        async function loadNote(id) {
-            console.log('Loading note:', id);
-            try {
-                const response = await apiCall(`/notes/${id}`);
-                if (!response.ok) {
-                    if (response.status === 401 || response.status === 403) {
-                        showLoginModal();
-                        return;
-                    }
-                    throw new Error('Failed to load note: ' + response.status);
-                }
-                currentNote = await response.json();
-                currentNoteId = currentNote.id;
-                renderEditor();
-                renderNotesList();
-                updateBacklinks(currentNote.content || '');
-            } catch (error) {
-                console.error('Failed to load note:', error);
-                alert('Failed to load note: ' + error.message);
-            }
-        }
-
-        function renderEditor() {
-            const container = document.getElementById('editorContainer');
-            container.innerHTML = `
-                <div class="editor-header">
-                    <div class="editor-actions">
-                        <!-- READ-ONLY: button class="btn" onclick="saveNote()">Save</button -->
-                        <!-- READ-ONLY: button class="btn btn-danger" onclick="deleteNote()">Delete</button -->
-                    </div>
-                </div>
-                <div class="editor-content">
-                    <input type="text" class="editor-title" id="noteTitle"
-                           value="${escapeHtml(currentNote.title)}"
-                           placeholder="Note title"
-                           oninput="updatePreview()">
-                    <div class="tags-display" id="tagsDisplay"></div>
-                    <div class="editor-with-sidebar">
-                        <div class="editor-split">
-                            <div class="editor-pane">
-                                <div class="editor-pane-header">Markdown</div>
-                                <textarea class="editor-body" id="noteContent"
-                                          placeholder="Write your note in markdown..."
-                                          oninput="updatePreview()">${escapeHtml(currentNote.content)}</textarea>
-                            </div>
-                            <div class="preview-pane">
-                                <div class="editor-pane-header">Preview</div>
-                                <div class="preview-content" id="previewContent"></div>
-                            </div>
-                        </div>
-                        <div class="backlinks-sidebar" id="backlinksSidebar">
-                            <div class="backlinks-header">Linked References</div>
-                            <div class="backlinks-content" id="backlinksContent">
-                                <div class="loading">Loading...</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            updatePreview();
-            loadAndRenderBacklinks(currentNote.id);
-        }
-
-        async function loadAndRenderBacklinks(noteId) {
-            const linksData = await loadBacklinks(noteId);
-            renderBacklinks(linksData);
-        }
-
-        function renderBacklinks(linksData) {
-            const container = document.getElementById('backlinksContent');
-            if (!container) return;
-
-            if (!linksData || (!linksData.outgoing?.length && !linksData.incoming?.length)) {
-                container.innerHTML = '<div class="no-backlinks">No links to or from this note</div>';
-                return;
-            }
-
-            let html = '';
-            
-            // Incoming links (backlinks) - most important
-            if (linksData.incoming?.length > 0) {
-                html += '<div class="backlinks-section"><div class="backlinks-section-title">Links to this note</div>';
-                html += linksData.incoming.map(link => `
-                    <div class="backlink-item" onclick="loadNote('${link.target_id}')">
-                        <div class="backlink-title">${escapeHtml(link.display_text)}</div>
-                    </div>
-                `).join('');
-                html += '</div>';
-            }
-
-            // Outgoing links
-            if (linksData.outgoing?.length > 0) {
-                html += '<div class="backlinks-section"><div class="backlinks-section-title">Links from this note</div>';
-                html += linksData.outgoing.map(link => {
-                    if (link.exists) {
-                        return `<div class="backlink-item ${link.target_id ? '' : 'broken'}" onclick="${link.target_id ? `loadNote('${link.target_id}')` : `createNoteFromLink('${link.target_title.replace(/'/g, "\\'")}')`}">
-                            <div class="backlink-title">${escapeHtml(link.display_text)}</div>
-                        </div>`;
-                    } else {
-                        return `<div class="backlink-item broken" onclick="createNoteFromLink('${link.target_title.replace(/'/g, "\\'")}')">
-                            <div class="backlink-title">${escapeHtml(link.display_text)} <span class="create-note">+</span></div>
-                        </div>`;
-                    }
-                }).join('');
-                html += '</div>';
-            }
-
-            container.innerHTML = html;
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        // Parse wikilinks [[...]] and return metadata
-        function parseWikilinks(text) {
-            const wikilinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
-            const links = [];
-            let match;
-            while ((match = wikilinkRegex.exec(text)) !== null) {
-                const fullTarget = match[1].trim();
-                const alias = match[2]?.trim();
-                
-                // Split target and heading
-                const hashIndex = fullTarget.indexOf('#');
-                const targetTitle = hashIndex >= 0 ? fullTarget.substring(0, hashIndex).trim() : fullTarget;
-                const heading = hashIndex >= 0 ? fullTarget.substring(hashIndex + 1).trim() : null;
-                
-                links.push({
-                    fullMatch: match[0],
-                    targetTitle,
-                    displayText: alias || targetTitle,
-                    heading,
-                    start: match.index,
-                    end: match.index + match[0].length
-                });
-            }
-            return links;
-        }
-
-        // Find note by title (case-insensitive)
-        function findNoteByTitle(title) {
-            return notes.find(n => n.title.toLowerCase() === title.toLowerCase());
-        }
-
-        // Render wikilinks as clickable links
-        function renderWikilinks(content) {
-            const links = parseWikilinks(content);
-            let result = content;
-            
-            // Replace from end to start to preserve indices
-            for (let i = links.length - 1; i >= 0; i--) {
-                const link = links[i];
-                const targetNote = findNoteByTitle(link.targetTitle);
-                
-                if (targetNote) {
-                    // Existing note - link to it
-                    const replacement = `<a href="#" onclick="loadNote('${targetNote.id}'); return false;" class="wikilink">${link.displayText}</a>`;
-                    result = result.substring(0, link.start) + replacement + result.substring(link.end);
-                } else {
-                    // Broken link - offer to create
-                    const replacement = `<a href="#" onclick="createNoteFromLink('${link.targetTitle.replace(/'/g, "\\'")}'); return false;" class="wikilink broken" title="Click to create note">${link.displayText}</a>`;
-                    result = result.substring(0, link.start) + replacement + result.substring(link.end);
-                }
-            }
-            
-            return result;
-        }
-
-        // Create new note from wikilink click
-        async function createNoteFromLink(title) {
-            try {
-                const response = await apiCall('/notes', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        title: title,
-                        content: ''
-                    })
-                });
-                const newNote = await response.json();
-                notes.push(newNote);
-                await loadNotes();
-                loadNote(newNote.id);
-                showNotification(`Created note: ${title}`, 'success');
-            } catch (error) {
-                console.error('Failed to create note:', error);
-                showNotification('Failed to create note', 'error');
-            }
-        }
-
-        // Extract tags from content
-        function extractTags(content) {
-            // Match #tag but not hex colors (#fff, #123456)
-            const tagRegex = /(?<![a-zA-Z0-9])#([a-zA-Z0-9_\-/]+)/g;
-            const hexColorRegex = /^#[a-fA-F0-9]{6}$|^#[a-fA-F0-9]{3}$/;
-            const tags = new Set();
-            
-            let match;
-            while ((match = tagRegex.exec(content)) !== null) {
-                const tag = match[1].toLowerCase();
-                // Skip hex colors
-                if (!hexColorRegex.test('#' + tag)) {
-                    tags.add(tag);
-                }
-            }
-            
-            return Array.from(tags);
-        }
-
-        // Load and display backlinks
-        async function loadBacklinks(noteId) {
-            try {
-                const response = await apiCall(`/notes/${noteId}/links`);
-                if (!response.ok) return null;
-                return await response.json();
-            } catch (error) {
-                console.error('Failed to load backlinks:', error);
-                return null;
-            }
-        }
-
-        function updatePreview() {
-            const content = document.getElementById('noteContent')?.value || '';
-            const previewElement = document.getElementById('previewContent');
-
-            if (!previewElement) return;
-
-            // Configure marked for GitHub Flavored Markdown
-            marked.setOptions({
-                breaks: true,
-                gfm: true,
-                highlight: function(code, lang) {
-                    if (lang && hljs.getLanguage(lang)) {
-                        try {
-                            return hljs.highlight(code, { language: lang }).value;
-                        } catch (e) {
-                            console.error('Highlight error:', e);
-                        }
-                    }
-                    return hljs.highlightAuto(code).value;
-                }
+function getSortedNotes(arr) {
+    const copy = [...arr];
+    switch (sortOrder) {
+        case 'title':   return copy.sort((a,b) => a.title.localeCompare(b.title));
+        case 'created': return copy.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+        case 'viewed': {
+            const order = recentlyViewed.map(r => r.id);
+            return copy.sort((a,b) => {
+                const ai = order.indexOf(a.id), bi = order.indexOf(b.id);
+                if (ai === -1 && bi === -1) return 0;
+                if (ai === -1) return 1; if (bi === -1) return -1;
+                return ai - bi;
             });
+        }
+        default: return copy.sort((a,b) => new Date(b.updated_at) - new Date(a.updated_at));
+    }
+}
 
-            // Render markdown
-            let html = marked.parse(content);
-            
-            // Render wikilinks
-            html = renderWikilinks(html);
-            
-            previewElement.innerHTML = html;
+function setSortOrder(order) {
+    sortOrder = order;
+    localStorage.setItem('synote_sort', order);
+    renderNotesList();
+}
 
-            // Update tags display
-            updateTagsDisplay(content);
+function renderNotesList() {
+    const list = document.getElementById('notesList');
+    const info = document.getElementById('searchInfo');
+    const openIds = new Set(openPanes.map(p => p.note.id));
+    const sorted = getSortedNotes(notes);
+    const searchQuery = isSearching ? document.getElementById('searchInput')?.value.trim() : '';
 
-            // Trigger auto-save
-            scheduleAutoSave();
+    let html = '';
+
+    if (!isSearching) {
+        // Pinned section
+        const pinned = sorted.filter(n => starredNotes.has(n.id));
+        if (pinned.length > 0) {
+            html += `<div class="list-section-label">⭐ Pinned</div>`;
+            pinned.forEach(note => {
+                const active = openIds.has(note.id);
+                html += `<div class="note-item ${active ? 'active' : ''}" onclick="loadNote('${note.id}')">
+                    <div class="note-item-title">${escapeHtml(note.title || 'Untitled')}</div>
+                    <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
+                </div>`;
+            });
         }
 
-        function updateTagsDisplay(content) {
-            const tagsContainer = document.getElementById('tagsDisplay');
-            if (!tagsContainer) return;
-            
-            const tags = extractTags(content);
-            if (tags.length === 0) {
-                tagsContainer.innerHTML = '';
-                return;
-            }
-            
-            tagsContainer.innerHTML = tags.map(tag => 
-                `<span class="tag" onclick="filterByTag('${tag.replace(/'/g, "\\'")}')">#${tag}</span>`
-            ).join(' ');
+        // Recently viewed section
+        if (recentlyViewed.length > 0) {
+            html += `<div class="list-section-label"${pinned.length ? ' style="margin-top:4px;"' : ''}>Recently viewed</div>`;
+            recentlyViewed.slice(0, 5).forEach(r => {
+                const active = openIds.has(r.id);
+                html += `<div class="note-item ${active ? 'active' : ''}" onclick="loadNote('${r.id}')">
+                    <div class="note-item-title">${escapeHtml(r.title)}</div>
+                </div>`;
+            });
+            html += `<div class="list-section-label" style="margin-top:4px;">All notes</div>`;
         }
+    }
 
-        async function filterByTag(tag) {
+    if (sorted.length === 0 && isSearching) {
+        html += `<div style="padding:16px;text-align:center;color:var(--sidebar-muted);font-size:12.5px;">No notes found</div>`;
+    } else {
+        sorted.forEach(note => {
+            const active = openIds.has(note.id);
+            const titleHtml = searchQuery ? highlightMatch(note.title || 'Untitled', searchQuery) : escapeHtml(note.title || 'Untitled');
+            html += `<div class="note-item ${active ? 'active' : ''}" onclick="loadNote('${note.id}')">
+                <div class="note-item-title">${titleHtml}</div>
+                <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
+            </div>`;
+        });
+    }
+
+    list.innerHTML = html;
+
+    if (isSearching) {
+        info.style.display = 'block';
+        info.textContent = `${notes.length} note${notes.length !== 1 ? 's' : ''} found`;
+    } else {
+        info.style.display = 'none';
+    }
+}
+
+function addToRecentlyViewed(note) {
+    recentlyViewed = recentlyViewed.filter(r => r.id !== note.id);
+    recentlyViewed.unshift({ id: note.id, title: note.title });
+    if (recentlyViewed.length > 7) recentlyViewed = recentlyViewed.slice(0, 7);
+    localStorage.setItem('synote_recent', JSON.stringify(recentlyViewed));
+}
+
+// ════════════════════════════════════════════════════════════
+// Search
+// ════════════════════════════════════════════════════════════
+async function handleSearch() {
+    const q = document.getElementById('searchInput').value.trim();
+    if (searchTimeout) clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(async () => {
+        if (q === '') {
+            isSearching = false;
+            await loadNotes();
+        } else {
             isSearching = true;
             try {
-                const response = await apiCall(`/tags/${encodeURIComponent(tag)}/notes`);
-                notes = await response.json();
+                const res = await fetch(`${API_URL}/search?q=${encodeURIComponent(q)}`);
+                notes = await res.json();
                 renderNotesList();
-                showNotification(`Showing notes with #${tag}`, 'info');
-            } catch (error) {
-                console.error('Failed to filter by tag:', error);
-                showNotification('Failed to filter', 'error');
-            }
+            } catch { showNotification('Search failed', 'error'); }
+        }
+    }, 280);
+}
+
+// ════════════════════════════════════════════════════════════
+// Pane management
+// ════════════════════════════════════════════════════════════
+function makePaneUid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+async function loadNote(id) {
+    // Already open? scroll to it
+    const existing = openPanes.find(p => p.note.id === id);
+    if (existing) {
+        currentNote = existing.note;
+        document.getElementById(`pane-${existing.uid}`)?.scrollIntoView({ behavior: 'smooth', inline: 'nearest' });
+        renderNotesList();
+        return;
+    }
+    try {
+        const res = await apiCall(`/notes/${id}`);
+        if (!res.ok) { if (res.status === 401) { showLoginModal(); return; } throw new Error(); }
+        const note = await res.json();
+        noteCache.set(note.id, note);
+        currentNote = note;
+        addToRecentlyViewed(note);
+        const uid = makePaneUid();
+
+        if (openPanes.length >= MAX_PANES) {
+            // Replace the oldest non-minimized pane; fall back to oldest overall
+            const oldest = openPanes.find(p => !p.minimized) || openPanes[0];
+            openPanes.splice(openPanes.indexOf(oldest), 1, { uid, note, history: [note.id], historyIdx: 0, minimized: false });
+            showNotification(`Replaced oldest pane (max ${MAX_PANES})`, 'info');
+        } else {
+            openPanes.push({ uid, note, history: [note.id], historyIdx: 0, minimized: false });
         }
 
-        function scheduleAutoSave() {
-            if (autoSaveTimeout) {
-                clearTimeout(autoSaveTimeout);
-            }
-            autoSaveTimeout = setTimeout(() => {
-                saveNote(true); // Auto-save silently
-            }, 2000); // Save after 2 seconds of inactivity
-        }
+        renderPanes();
+        renderNotesList();
+    } catch { showNotification('Failed to load note', 'error'); }
+}
 
-        async function createNewNote() {
-            try {
-                const response = await fetch(`${API_URL}/notes`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: 'Untitled Note',
-                        content: ''
-                    })
-                });
-                currentNote = await response.json();
-                await loadNotes();
-                renderEditor();
-            } catch (error) {
-                console.error('Failed to create note:', error);
-            }
-        }
+async function navigateInPane(paneUid, noteId) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    let note = noteCache.get(noteId);
+    if (!note) {
+        try {
+            const res = await apiCall(`/notes/${noteId}`);
+            if (!res.ok) return;
+            note = await res.json();
+            noteCache.set(note.id, note);
+        } catch { return; }
+    }
+    // Update history
+    pane.history = pane.history.slice(0, pane.historyIdx + 1);
+    pane.history.push(noteId);
+    pane.historyIdx = pane.history.length - 1;
+    pane.note = note;
+    pane.minimized = false; // auto-restore when navigating into a pane
+    currentNote = note;
+    addToRecentlyViewed(note);
+    renderPaneContent(pane);
+    renderNotesList();
+}
 
-        async function saveNote(silent = false) {
-            if (!currentNote) return;
+async function goBack(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane || pane.historyIdx <= 0) return;
+    pane.historyIdx--;
+    const noteId = pane.history[pane.historyIdx];
+    let note = noteCache.get(noteId);
+    if (!note) {
+        try {
+            const res = await apiCall(`/notes/${noteId}`);
+            note = await res.json();
+            noteCache.set(noteId, note);
+        } catch { return; }
+    }
+    pane.note = note;
+    currentNote = note;
+    renderPaneContent(pane);
+    renderNotesList();
+}
 
-            const title = document.getElementById('noteTitle')?.value || currentNote.title;
-            const content = document.getElementById('noteContent')?.value || currentNote.content;
+async function goForward(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane || pane.historyIdx >= pane.history.length - 1) return;
+    pane.historyIdx++;
+    const noteId = pane.history[pane.historyIdx];
+    let note = noteCache.get(noteId);
+    if (!note) {
+        try {
+            const res = await apiCall(`/notes/${noteId}`);
+            note = await res.json();
+            noteCache.set(noteId, note);
+        } catch { return; }
+    }
+    pane.note = note;
+    currentNote = note;
+    renderPaneContent(pane);
+    renderNotesList();
+}
 
-            try {
-                const response = await fetch(`${API_URL}/notes/${currentNote.id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ title, content })
-                });
-                currentNote = await response.json();
-                await loadNotes();
+function closePane(paneUid) {
+    const idx = openPanes.findIndex(p => p.uid === paneUid);
+    if (idx === -1) return;
+    openPanes.splice(idx, 1);
+    currentNote = openPanes[openPanes.length - 1]?.note || null;
+    renderPanes();
+    renderNotesList();
+}
 
-                if (!silent) {
-                    showNotification('Note saved!', 'success');
-                }
-            } catch (error) {
-                console.error('Failed to save note:', error);
-                if (!silent) {
-                    showNotification('Failed to save note', 'error');
-                }
-            }
-        }
+function toggleMinimizePane(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    pane.minimized = !pane.minimized;
+    // Rebuild just this pane's shell in place
+    const el = document.getElementById(`pane-${paneUid}`);
+    if (!el) return;
+    const newShell = document.createElement('div');
+    newShell.innerHTML = buildPaneShell(pane);
+    const newPane = newShell.firstElementChild;
+    el.replaceWith(newPane);
+    if (!pane.minimized) populatePaneBody(pane);
+    // Re-attach resize handles after DOM change
+    addPaneResizeHandles();
+}
 
-        function showNotification(message, type = 'info') {
-            // Simple notification - can be improved later
-            const existingNotif = document.querySelector('.notification');
-            if (existingNotif) existingNotif.remove();
+function renderPanes() {
+    const container = document.getElementById('panesContainer');
+    if (!container) return;
+    if (openPanes.length === 0) {
+        container.innerHTML = `<div class="empty-state">
+            <h2>Welcome to Synote</h2>
+            <p>Click a note in the sidebar to open it<br>
+            <span style="font-size:12px;opacity:0.7;">Press <kbd style="background:var(--border-light);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:monospace;">⌘K</kbd> for command palette</span></p>
+        </div>`;
+        return;
+    }
+    container.innerHTML = openPanes.map(pane => buildPaneShell(pane)).join('');
+    openPanes.forEach(pane => populatePaneBody(pane));
+    addPaneResizeHandles();
+}
 
-            const notif = document.createElement('div');
-            notif.className = 'notification';
-            notif.textContent = message;
-            notif.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 12px 24px;
-                background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#007bff'};
-                color: white;
-                border-radius: 4px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-                z-index: 1000;
-                animation: slideIn 0.3s ease;
-            `;
-
-            document.body.appendChild(notif);
-
-            setTimeout(() => {
-                notif.style.animation = 'slideOut 0.3s ease';
-                setTimeout(() => notif.remove(), 300);
-            }, 2000);
-        }
-
-        async function deleteNote() {
-            if (!currentNote) return;
-            if (!confirm('Are you sure you want to delete this note?')) return;
-
-            try {
-                await fetch(`${API_URL}/notes/${currentNote.id}`, {
-                    method: 'DELETE'
-                });
-                currentNote = null;
-                await loadNotes();
-                document.getElementById('editorContainer').innerHTML = `
-                    <div class="empty-state">
-                        <h2>Note deleted</h2>
-                        <p>Create a new note to get started</p>
+function buildPaneShell(pane) {
+    const { uid, note, historyIdx, history, minimized } = pane;
+    const canBack  = historyIdx > 0;
+    const canFwd   = historyIdx < history.length - 1;
+    const updated  = new Date(note.updated_at).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+    const minIcon  = minimized ? '⊡' : '⊟';
+    const minTitle = minimized ? 'Restore pane' : 'Minimize pane';
+    const isStarred = starredNotes.has(note.id);
+    return `
+    <div class="note-pane ${minimized ? 'minimized' : ''}" id="pane-${uid}">
+        <div class="pane-topbar">
+            <button class="pane-nav-btn" onclick="goBack('${uid}')" ${canBack ? '' : 'disabled'} title="Go back">←</button>
+            <button class="pane-nav-btn" onclick="goForward('${uid}')" ${canFwd ? '' : 'disabled'} title="Go forward">→</button>
+            <span class="pane-title-label" title="${escapeHtml(note.title)}" ondblclick="startRenameInPane('${uid}')">${escapeHtml(note.title)}</span>
+            <div class="pane-topbar-actions">
+                <span style="font-size:11px;color:var(--text-muted);">${updated}</span>
+                <button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${note.id}',event)" title="${isStarred ? 'Unstar' : 'Star note'}">${isStarred ? '⭐' : '☆'}</button>
+                <button class="btn btn-primary" style="font-size:11.5px;padding:3px 9px;" onclick="openEditorModal('${uid}')">Edit</button>
+                <div class="export-wrap" id="export-${uid}">
+                    <button class="btn-icon" onclick="toggleExportMenu('${uid}')" title="Export">⬇</button>
+                    <div class="export-menu">
+                        <button class="export-item" onclick="exportMarkdown('${uid}')">📄 Markdown</button>
+                        <button class="export-item" onclick="exportPDF('${uid}')">🖨 Print / PDF</button>
                     </div>
-                `;
-            } catch (error) {
-                console.error('Failed to delete note:', error);
-                alert('Failed to delete note');
+                </div>
+                <button class="minimize-btn" onclick="toggleMinimizePane('${uid}')" title="${minTitle}">${minIcon}</button>
+                <button class="btn-icon" onclick="closePane('${uid}')" title="Close pane">✕</button>
+            </div>
+        </div>
+        <div class="pane-body" id="pane-body-${uid}">
+            <div style="color:var(--text-muted);font-size:13px;padding:40px 0;text-align:center;">Loading…</div>
+        </div>
+    </div>`;
+}
+
+function renderPaneContent(pane) {
+    // Rebuild just this pane's shell (updates nav buttons) then populate
+    const el = document.getElementById(`pane-${pane.uid}`);
+    if (!el) return;
+    el.outerHTML = buildPaneShell(pane);
+    populatePaneBody(pane);
+}
+
+function populatePaneBody(pane) {
+    const { uid, note } = pane;
+    const body = document.getElementById(`pane-body-${uid}`);
+    if (!body) return;
+
+    const toc = buildTOC(note.content, uid);
+    const tocHtml = toc.length >= 3 ? renderTOCHtml(toc, uid) : '';
+    const wc = getWordCount(note.content);
+    const readMin = Math.max(1, Math.round(wc / 200));
+
+    body.innerHTML = `
+        <div class="pane-note-title">${escapeHtml(note.title)}</div>
+        <div class="tags-display" id="tags-${uid}"></div>
+        ${tocHtml}
+        <div class="preview-content" id="preview-${uid}"></div>
+        <div class="pane-backlinks-section">
+            <div class="pane-backlinks-title">Linked References</div>
+            <div id="backlinks-${uid}"><div style="font-size:12.5px;color:var(--text-muted);">Loading…</div></div>
+        </div>`;
+
+    // Word count footer sits outside scrollable body
+    const footer = document.createElement('div');
+    footer.className = 'pane-footer';
+    footer.innerHTML = `<span>${wc.toLocaleString()} words</span><span>·</span><span>${readMin} min read</span>`;
+    body.parentElement.appendChild(footer);
+
+    renderMarkdownInto(`preview-${uid}`, note.content, uid);
+    updateTagsDisplayFor(`tags-${uid}`, note.content);
+    loadAndRenderBacklinksFor(uid, note.id);
+}
+
+// ════════════════════════════════════════════════════════════
+// Table of Contents
+// ════════════════════════════════════════════════════════════
+function buildTOC(content, paneUid) {
+    const regex = /^(#{1,4})\s+(.+)$/gm;
+    const items = [];
+    let m;
+    while ((m = regex.exec(content)) !== null) {
+        items.push({ level: m[1].length, text: m[2].trim(), id: 'h-' + paneUid + '-' + items.length });
+    }
+    return items;
+}
+
+function renderTOCHtml(items, paneUid) {
+    const links = items.map(item =>
+        `<span class="toc-item" data-level="${item.level}" onclick="scrollToHeading('${paneUid}','${item.id}')">${escapeHtml(item.text)}</span>`
+    ).join('');
+    return `<div class="pane-toc" id="toc-${paneUid}">
+        <div class="pane-toc-header" onclick="toggleTOC('${paneUid}')">
+            <span class="pane-toc-label">On this page</span>
+            <span class="pane-toc-arrow">▾</span>
+        </div>
+        <div class="pane-toc-list">${links}</div>
+    </div>`;
+}
+
+function toggleTOC(paneUid) {
+    document.getElementById(`toc-${paneUid}`)?.classList.toggle('collapsed');
+}
+
+function scrollToHeading(paneUid, headingId) {
+    const body = document.getElementById(`pane-body-${paneUid}`);
+    const el = body?.querySelector(`#${headingId}`);
+    if (el) {
+        body.scrollTo({ top: el.offsetTop - 20, behavior: 'smooth' });
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// Markdown rendering
+// ════════════════════════════════════════════════════════════
+function configureMarked(paneUid) {
+    const renderer = new marked.Renderer();
+    const headingCounts = {};
+    renderer.heading = function(text, level) {
+        const key = text.toLowerCase();
+        headingCounts[key] = (headingCounts[key] || 0) + 1;
+        const id = paneUid
+            ? 'h-' + paneUid + '-' + (Object.keys(headingCounts).indexOf(key))
+            : 'h-' + key.replace(/[^\w]+/g, '-');
+        return `<h${level} id="${id}">${text}</h${level}>`;
+    };
+    marked.setOptions({
+        breaks: true, gfm: true,
+        renderer,
+        highlight: (code, lang) => {
+            if (lang && hljs.getLanguage(lang)) {
+                try { return hljs.highlight(code, { language: lang }).value; } catch {}
             }
+            return hljs.highlightAuto(code).value;
         }
+    });
+}
 
-        // Load notes on page load
-        loadNotes();
+function renderMarkdownInto(elementId, content, paneUid) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    configureMarked(paneUid);
+    el.innerHTML = renderWikilinks(marked.parse(content || ''), paneUid);
+}
 
-        // Keyboard shortcuts
-        document.addEventListener('keydown', function(e) {
-            // Cmd+S or Ctrl+S to save
-            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-                e.preventDefault();
-                saveNote();
-            }
-
-            // Cmd+K or Ctrl+K to focus search
-            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-                e.preventDefault();
-                document.getElementById('searchInput').focus();
-            }
-
-            // Escape to clear search
-            if (e.key === 'Escape' && document.activeElement.id === 'searchInput') {
-                clearSearch();
-                document.getElementById('searchInput').blur();
-            }
+// ════════════════════════════════════════════════════════════
+// Wikilinks
+// ════════════════════════════════════════════════════════════
+function parseWikilinks(text) {
+    const re = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+    const links = [];
+    let m;
+    while ((m = re.exec(text)) !== null) {
+        const full = m[1].trim();
+        const hi = full.indexOf('#');
+        links.push({
+            fullMatch: m[0],
+            targetTitle: hi >= 0 ? full.slice(0, hi).trim() : full,
+            displayText: m[2]?.trim() || (hi >= 0 ? full.slice(0, hi).trim() : full),
+            start: m.index, end: m.index + m[0].length
         });
+    }
+    return links;
+}
 
-        // ==================== GRAPH VISUALIZATION ====================
-        
-        let graphSimulation = null;
+function findNoteByTitle(title) {
+    return notes.find(n => n.title.toLowerCase() === title.toLowerCase());
+}
 
-        async function showGraphView() {
-            const container = document.getElementById('editorContainer');
-            container.innerHTML = `
-                <div class="graph-container">
-                    <div class="graph-header">
-                        <h2>🕸️ Note Graph</h2>
-                        <!-- READ-ONLY: button class="btn" onclick="closeGraphView()">Close</button -->
+function renderWikilinks(content, paneUid) {
+    const links = parseWikilinks(content);
+    let result = content;
+    for (let i = links.length - 1; i >= 0; i--) {
+        const link = links[i];
+        const target = findNoteByTitle(link.targetTitle);
+        let replacement;
+        if (target) {
+            const nav = paneUid
+                ? `navigateInPane('${paneUid}','${target.id}')`
+                : `loadNote('${target.id}')`;
+            replacement = `<a href="#" class="wikilink"
+                onmouseenter="showWikilinkPreview(event,'${escapeHtml(target.title).replace(/'/g,"\\'")}','${target.id}')"
+                onmousemove="moveWikilinkPreview(event)"
+                onmouseleave="hideWikilinkPreview()"
+                onclick="${nav};return false;">${escapeHtml(link.displayText)}</a>`;
+        } else {
+            replacement = `<a href="#" class="wikilink broken"
+                title="Note not found — click to create"
+                onclick="createNoteFromLink('${link.targetTitle.replace(/'/g,"\\'")}');return false;">${escapeHtml(link.displayText)}</a>`;
+        }
+        result = result.slice(0, link.start) + replacement + result.slice(link.end);
+    }
+    return result;
+}
+
+async function createNoteFromLink(title) {
+    try {
+        const res = await apiCall('/notes', {
+            method: 'POST',
+            body: JSON.stringify({ title, content: '' })
+        });
+        const note = await res.json();
+        notes.push(note);
+        await loadNotes();
+        loadNote(note.id);
+        showNotification(`Created: ${title}`, 'success');
+    } catch { showNotification('Failed to create note', 'error'); }
+}
+
+// ════════════════════════════════════════════════════════════
+// Hover Preview
+// ════════════════════════════════════════════════════════════
+let previewTimeout = null;
+
+function showWikilinkPreview(event, title, noteId) {
+    clearTimeout(previewTimeout);
+    previewTimeout = setTimeout(() => {
+        const preview = document.getElementById('wikilinkPreview');
+        document.getElementById('wpTitle').textContent = title;
+        const cached = noteCache.get(noteId);
+        if (cached) {
+            const stripped = cached.content.replace(/#{1,6}\s+/g, '').replace(/\[\[|\]\]/g, '').replace(/[*_`]/g, '');
+            document.getElementById('wpExcerpt').textContent = stripped.slice(0, 180) + (stripped.length > 180 ? '…' : '');
+        } else {
+            document.getElementById('wpExcerpt').textContent = 'Click to open';
+        }
+        positionPreview(preview, event);
+        preview.classList.add('visible');
+    }, 350);
+}
+
+function moveWikilinkPreview(event) {
+    const preview = document.getElementById('wikilinkPreview');
+    if (preview.classList.contains('visible')) positionPreview(preview, event);
+}
+
+function positionPreview(el, event) {
+    const x = event.clientX + 14;
+    const y = event.clientY + 14;
+    const maxX = window.innerWidth - el.offsetWidth - 16;
+    const maxY = window.innerHeight - el.offsetHeight - 16;
+    el.style.left = Math.min(x, maxX) + 'px';
+    el.style.top  = Math.min(y, maxY) + 'px';
+}
+
+function hideWikilinkPreview() {
+    clearTimeout(previewTimeout);
+    document.getElementById('wikilinkPreview').classList.remove('visible');
+}
+
+// ════════════════════════════════════════════════════════════
+// Tags
+// ════════════════════════════════════════════════════════════
+function extractTags(content) {
+    const re = /(?<![a-zA-Z0-9])#([a-zA-Z0-9_\-/]+)/g;
+    const hex = /^#[a-fA-F0-9]{3,6}$/;
+    const tags = new Set();
+    let m;
+    while ((m = re.exec(content)) !== null) {
+        if (!hex.test('#' + m[1])) tags.add(m[1].toLowerCase());
+    }
+    return [...tags];
+}
+
+function updateTagsDisplayFor(elId, content) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const tags = extractTags(content);
+    el.innerHTML = tags.map(t => `<span class="tag" onclick="filterByTag('${t.replace(/'/g,"\\'")}'">#${t}</span>`).join('');
+}
+
+async function filterByTag(tag) {
+    isSearching = true;
+    try {
+        const res = await apiCall(`/tags/${encodeURIComponent(tag)}/notes`);
+        notes = await res.json();
+        renderNotesList();
+        showNotification(`#${tag}`, 'info');
+    } catch { showNotification('Filter failed', 'error'); }
+}
+
+// ════════════════════════════════════════════════════════════
+// Backlinks (per pane)
+// ════════════════════════════════════════════════════════════
+async function loadBacklinks(noteId) {
+    try {
+        const res = await apiCall(`/notes/${noteId}/links`);
+        return res.ok ? await res.json() : null;
+    } catch { return null; }
+}
+
+async function loadAndRenderBacklinksFor(paneUid, noteId) {
+    const data = await loadBacklinks(noteId);
+    const container = document.getElementById(`backlinks-${paneUid}`);
+    if (!container) return;
+
+    if (!data || (!data.outgoing?.length && !data.incoming?.length)) {
+        container.innerHTML = '<div class="no-backlinks">No links to or from this note</div>';
+        return;
+    }
+
+    let html = '';
+    if (data.incoming?.length) {
+        html += `<div class="backlinks-section"><div class="backlinks-section-title">Links to this note</div>`;
+        html += data.incoming.map(l =>
+            `<div class="backlink-item" onclick="navigateInPane('${paneUid}','${l.target_id}')">
+                <div class="backlink-title">${escapeHtml(l.display_text)}</div>
+             </div>`
+        ).join('') + '</div>';
+    }
+    if (data.outgoing?.length) {
+        html += `<div class="backlinks-section"><div class="backlinks-section-title">Links from this note</div>`;
+        html += data.outgoing.map(l => l.exists
+            ? `<div class="backlink-item" onclick="navigateInPane('${paneUid}','${l.target_id || ''}')">
+                   <div class="backlink-title">${escapeHtml(l.display_text)}</div>
+               </div>`
+            : `<div class="backlink-item broken" onclick="createNoteFromLink('${l.target_title.replace(/'/g,"\\'")}')">
+                   <div class="backlink-title">${escapeHtml(l.display_text)} <span style="color:var(--danger);font-size:10.5px;">+create</span></div>
+               </div>`
+        ).join('') + '</div>';
+    }
+    container.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════════════
+// Editor Modal
+// ════════════════════════════════════════════════════════════
+function openEditorModal(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane || document.getElementById('editorModal')) return;
+    const { note } = pane;
+
+    const modal = document.createElement('div');
+    modal.id = 'editorModal';
+    modal.dataset.paneUid = paneUid;
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="handleModalBg(event)">
+            <div class="modal-editor">
+                <div class="modal-header">
+                    <input class="modal-title-input" id="modalTitle" value="${escapeHtml(note.title)}" placeholder="Title">
+                    <div class="modal-actions">
+                        <button class="btn btn-primary" onclick="saveFromModal()">Save</button>
+                        <button class="btn-icon" onclick="closeEditorModal()">✕</button>
                     </div>
-                    <svg class="graph-canvas" id="graphCanvas"></svg>
                 </div>
-            `;
-            
-            await loadAndRenderGraph();
-        }
-
-        function closeGraphView() {
-            document.getElementById('editorContainer').innerHTML = `
-                <div class="empty-state">
-                    <h2>Synote</h2>
-                    <p>Create a new note to get started</p>
+                <div class="modal-body">
+                    <div class="editor-split">
+                        <div class="editor-pane">
+                            <div class="editor-pane-header">Markdown</div>
+                            <textarea class="editor-body" id="modalContent"
+                                oninput="updateModalPreview()"
+                                onpaste="handleImagePaste(event)"
+                                ondragover="event.preventDefault()"
+                                ondrop="handleImageDrop(event)">${escapeHtml(note.content)}</textarea>
+                        </div>
+                        <div class="preview-pane">
+                            <div class="editor-pane-header">Preview</div>
+                            <div class="preview-content" id="modalPreview" style="flex:1;padding:18px 24px;overflow-y:auto;"></div>
+                        </div>
+                    </div>
                 </div>
-            `;
-            currentNote = null;
-        }
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    updateModalPreview();
+    addEditorResizeHandle();
+    modal._key = e => { if (e.key === 'Escape') closeEditorModal(); };
+    document.addEventListener('keydown', modal._key);
+}
 
-        async function loadAndRenderGraph() {
-            try {
-                const response = await apiCall('/graph');
-                if (!response.ok) {
-                    showNotification('Failed to load graph data', 'error');
-                    return;
-                }
-                
-                let data; try { data = await response.json(); } catch (e) { data = { error: "Unauthorized", message: "Please login" }; }
-                if (data.nodes.length === 0) {
-                    document.getElementById('graphCanvas').innerHTML = `
-                        <text x="50%" y="50%" text-anchor="middle" fill="#666" font-size="14">
-                            No notes yet. Create some notes with [[links]] to see connections!
-                        </text>
-                    `;
-                    return;
-                }
-                
-                renderForceGraph(data);
-            } catch (error) {
-                console.error('Failed to load graph:', error);
-                showNotification('Failed to load graph', 'error');
-            }
-        }
+function handleModalBg(e) { if (e.target.classList.contains('modal-overlay')) closeEditorModal(); }
+function closeEditorModal() {
+    const m = document.getElementById('editorModal');
+    if (!m) return;
+    document.removeEventListener('keydown', m._key);
+    m.remove();
+}
 
-        function renderForceGraph(data) {
-            const svg = d3.select('#graphCanvas');
-            const width = svg.node().parentElement.clientWidth;
-            const height = svg.node().parentElement.clientHeight;
-            
-            svg.attr('viewBox', `0 0 ${width} ${height}`)
-               .attr('width', width)
-               .attr('height', height);
-            
-            // Clear previous
-            svg.selectAll('*').remove();
-            
-            // Add zoom behavior
-            const g = svg.append('g');
-            const zoom = d3.zoom()
-                .scaleExtent([0.1, 4])
-                .on('zoom', (event) => g.attr('transform', event.transform));
-            svg.call(zoom);
-            
-            // Simulation
-            const simulation = d3.forceSimulation(data.nodes)
-                .force('link', d3.forceLink(data.edges).id(d => d.id).distance(100))
-                .force('charge', d3.forceManyBody().strength(-300))
-                .force('center', d3.forceCenter(width / 2, height / 2))
-                .force('collision', d3.forceCollide().radius(d => d.size + 10));
-            
-            graphSimulation = simulation;
-            
-            // Links
-            const link = g.append('g')
-                .attr('class', 'links')
-                .selectAll('line')
-                .data(data.edges)
-                .enter().append('line')
-                .attr('class', 'graph-link');
-            
-            // Nodes
-            const node = g.append('g')
-                .attr('class', 'nodes')
-                .selectAll('g')
-                .data(data.nodes)
-                .enter().append('g')
-                .attr('class', 'graph-node')
-                .call(d3.drag()
-                    .on('start', (event, d) => {
-                        if (!event.active) simulation.alphaTarget(0.3).restart();
-                        d.fx = d.x;
-                        d.fy = d.y;
-                    })
-                    .on('drag', (event, d) => {
-                        d.fx = event.x;
-                        d.fy = event.y;
-                    })
-                    .on('end', (event, d) => {
-                        if (!event.active) simulation.alphaTarget(0);
-                        d.fx = null;
-                        d.fy = null;
-                    }))
-                .on('click', (event, d) => {
-                    event.stopPropagation();
-                    loadNote(d.id);
-                });
-            
-            // Node circles
-            node.append('circle')
-                .attr('r', d => d.size || 8)
-                .attr('fill', '#007bff')
-                .attr('stroke', '#fff')
-                .attr('stroke-width', 2);
-            
-            // Node labels
-            node.append('text')
-                .attr('dy', d => (d.size || 8) + 15)
-                .attr('text-anchor', 'middle')
-                .text(d => d.title && d.title.length > 20 ? d.title.substring(0, 20) + '...' : d.title)
-                .attr('font-size', '11px')
-                .attr('fill', '#333');
-            
-            // Update positions on tick
-            simulation.on('tick', () => {
-                link
-                    .attr('x1', d => d.source.x)
-                    .attr('y1', d => d.source.y)
-                    .attr('x2', d => d.target.x)
-                    .attr('y2', d => d.target.y);
-                
-                node.attr('transform', d => `translate(${d.x},${d.y})`);
+function updateModalPreview() {
+    const content = document.getElementById('modalContent')?.value || '';
+    renderMarkdownInto('modalPreview', content, null);
+}
+
+async function saveFromModal() {
+    const modal = document.getElementById('editorModal');
+    const paneUid = modal?.dataset.paneUid;
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+
+    const title = document.getElementById('modalTitle').value;
+    const content = document.getElementById('modalContent').value;
+
+    try {
+        const res = await fetch(`${API_URL}/notes/${pane.note.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, content })
+        });
+        const updated = await res.json();
+        noteCache.set(updated.id, updated);
+        pane.note = updated;
+        currentNote = updated;
+        closeEditorModal();
+        renderPaneContent(pane);
+        await loadNotes();
+        showNotification('Saved!', 'success');
+    } catch { showNotification('Save failed', 'error'); }
+}
+
+// ════════════════════════════════════════════════════════════
+// Image paste & drag-drop in editor
+// ════════════════════════════════════════════════════════════
+function handleImagePaste(event) {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+        if (item.type.startsWith('image/')) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            insertImageFromFile(event.target, file);
+            break;
+        }
+    }
+}
+
+function handleImageDrop(event) {
+    event.preventDefault();
+    const file = event.dataTransfer.files[0];
+    if (file?.type.startsWith('image/')) {
+        insertImageFromFile(document.getElementById('modalContent'), file);
+    }
+}
+
+function insertImageFromFile(textarea, file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+        const markdown = `![${file.name}](${e.target.result})`;
+        insertAtCursor(textarea, markdown);
+        updateModalPreview();
+    };
+    reader.readAsDataURL(file);
+}
+
+function insertAtCursor(textarea, text) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    textarea.value = textarea.value.slice(0, start) + text + textarea.value.slice(end);
+    textarea.selectionStart = textarea.selectionEnd = start + text.length;
+}
+
+// ════════════════════════════════════════════════════════════
+// Export
+// ════════════════════════════════════════════════════════════
+function toggleExportMenu(paneUid) {
+    const wrap = document.getElementById(`export-${paneUid}`);
+    // Close all other open menus
+    document.querySelectorAll('.export-wrap.open').forEach(el => {
+        if (el !== wrap) el.classList.remove('open');
+    });
+    wrap?.classList.toggle('open');
+    // Close on outside click
+    setTimeout(() => {
+        const close = e => { if (!wrap?.contains(e.target)) { wrap?.classList.remove('open'); document.removeEventListener('click', close); } };
+        document.addEventListener('click', close);
+    }, 0);
+}
+
+function exportMarkdown(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    const { note } = pane;
+    const blob = new Blob([`# ${note.title}\n\n${note.content}`], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${note.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    document.getElementById(`export-${paneUid}`)?.classList.remove('open');
+}
+
+function exportPDF(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    // Hide all other panes, print, restore
+    const allPanes = document.querySelectorAll('.note-pane');
+    allPanes.forEach(el => {
+        if (el.id !== `pane-${paneUid}`) el.style.display = 'none';
+    });
+    document.getElementById(`export-${paneUid}`)?.classList.remove('open');
+    window.print();
+    allPanes.forEach(el => el.style.display = '');
+}
+
+// ════════════════════════════════════════════════════════════
+// Command Palette
+// ════════════════════════════════════════════════════════════
+let cmdSelectedIdx = 0;
+let cmdFilteredNotes = [];
+
+function showCommandPalette() {
+    if (document.getElementById('cmdOverlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'cmdOverlay';
+    overlay.className = 'cmd-overlay';
+    overlay.innerHTML = `
+        <div class="cmd-palette">
+            <div class="cmd-input-wrap">
+                <span class="cmd-icon">⌘</span>
+                <input class="cmd-input" id="cmdInput" placeholder="Search notes…" autocomplete="off">
+            </div>
+            <div class="cmd-results" id="cmdResults"></div>
+            <div class="cmd-footer">
+                <span class="cmd-hint"><kbd class="cmd-key">↑↓</kbd> Navigate</span>
+                <span class="cmd-hint"><kbd class="cmd-key">↵</kbd> Open</span>
+                <span class="cmd-hint"><kbd class="cmd-key">Esc</kbd> Close</span>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeCommandPalette(); });
+    const input = document.getElementById('cmdInput');
+    input.focus();
+    input.addEventListener('input', updateCmdResults);
+    input.addEventListener('keydown', handleCmdKey);
+    cmdSelectedIdx = 0;
+    updateCmdResults();
+}
+
+function closeCommandPalette() {
+    document.getElementById('cmdOverlay')?.remove();
+}
+
+function updateCmdResults() {
+    const q = document.getElementById('cmdInput')?.value.toLowerCase() || '';
+    if (q) {
+        cmdFilteredNotes = notes.filter(n => n.title.toLowerCase().includes(q));
+    } else {
+        // Recent notes first, then rest sorted
+        const recentIds = recentlyViewed.map(r => r.id);
+        const recentNotes = recentIds.map(id => notes.find(n => n.id === id)).filter(Boolean);
+        const others = getSortedNotes(notes).filter(n => !recentIds.includes(n.id));
+        cmdFilteredNotes = [...recentNotes, ...others].slice(0, 14);
+    }
+    cmdSelectedIdx = Math.min(cmdSelectedIdx, Math.max(0, cmdFilteredNotes.length - 1));
+    renderCmdResults();
+}
+
+function renderCmdResults() {
+    const el = document.getElementById('cmdResults');
+    if (!el) return;
+    if (cmdFilteredNotes.length === 0) {
+        el.innerHTML = '<div class="cmd-empty">No notes found</div>';
+        return;
+    }
+    el.innerHTML = cmdFilteredNotes.map((n, i) => `
+        <div class="cmd-item ${i === cmdSelectedIdx ? 'selected' : ''}" onclick="selectCmdItem(${i})">
+            <span class="cmd-item-icon">📄</span>
+            <span class="cmd-item-title">${escapeHtml(n.title)}</span>
+            <span class="cmd-item-date">${new Date(n.updated_at).toLocaleDateString()}</span>
+        </div>`
+    ).join('');
+}
+
+function selectCmdItem(idx) {
+    const note = cmdFilteredNotes[idx];
+    if (note) { loadNote(note.id); closeCommandPalette(); }
+}
+
+function handleCmdKey(e) {
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        cmdSelectedIdx = Math.min(cmdSelectedIdx + 1, cmdFilteredNotes.length - 1);
+        renderCmdResults();
+        document.querySelectorAll('.cmd-item')[cmdSelectedIdx]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        cmdSelectedIdx = Math.max(cmdSelectedIdx - 1, 0);
+        renderCmdResults();
+        document.querySelectorAll('.cmd-item')[cmdSelectedIdx]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+        selectCmdItem(cmdSelectedIdx);
+    } else if (e.key === 'Escape') {
+        closeCommandPalette();
+    }
+}
+
+// ════════════════════════════════════════════════════════════
+// Notifications
+// ════════════════════════════════════════════════════════════
+function showNotification(msg, type = 'info') {
+    document.querySelector('.notification')?.remove();
+    const colors = { success: '#3fb950', error: '#e5534b', info: '#6d5ef5' };
+    const n = document.createElement('div');
+    n.className = 'notification';
+    n.textContent = msg;
+    n.style.cssText = `position:fixed;top:20px;right:20px;padding:9px 18px;
+        background:${colors[type]||colors.info};color:white;border-radius:8px;
+        box-shadow:var(--shadow-md);z-index:5000;font-size:13px;font-weight:500;
+        font-family:var(--font);animation:slideInRight 0.22s ease;`;
+    document.body.appendChild(n);
+    setTimeout(() => {
+        n.style.animation = 'slideOutRight 0.22s ease forwards';
+        setTimeout(() => n.remove(), 220);
+    }, 2200);
+}
+
+// ════════════════════════════════════════════════════════════
+// Helpers
+// ════════════════════════════════════════════════════════════
+function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = text || '';
+    return d.innerHTML;
+}
+
+// ════════════════════════════════════════════════════════════
+// Graph View
+// ════════════════════════════════════════════════════════════
+let graphSimulation = null;
+
+async function showGraphView() {
+    const container = document.getElementById('panesContainer');
+    container.innerHTML = `
+        <div class="graph-container">
+            <div class="graph-header">
+                <h2>⬡ Note Graph</h2>
+                <button class="btn" onclick="closeGraphView()">← Back</button>
+            </div>
+            <svg class="graph-canvas" id="graphCanvas"></svg>
+        </div>`;
+    try {
+        const res = await apiCall('/graph');
+        if (!res.ok) { showNotification('Failed to load graph', 'error'); return; }
+        let data;
+        try { data = await res.json(); } catch { data = { nodes: [], edges: [] }; }
+        if (!data.nodes?.length) {
+            document.getElementById('graphCanvas').innerHTML = `<text x="50%" y="50%" text-anchor="middle" fill="rgba(255,255,255,0.4)" font-size="14" font-family="Inter,sans-serif">No notes yet. Create notes with [[links]] to see the graph!</text>`;
+            return;
+        }
+        renderForceGraph(data);
+    } catch { showNotification('Failed to load graph', 'error'); }
+}
+
+function closeGraphView() {
+    openPanes = []; currentNote = null;
+    renderPanes(); renderNotesList();
+}
+
+function renderForceGraph(data) {
+    const svg = d3.select('#graphCanvas');
+    const width = svg.node().parentElement.clientWidth;
+    const height = svg.node().parentElement.clientHeight;
+    svg.attr('viewBox', `0 0 ${width} ${height}`).attr('width', width).attr('height', height);
+    svg.selectAll('*').remove();
+    const g = svg.append('g');
+    svg.call(d3.zoom().scaleExtent([0.1,4]).on('zoom', e => g.attr('transform', e.transform)));
+    const sim = d3.forceSimulation(data.nodes)
+        .force('link', d3.forceLink(data.edges).id(d=>d.id).distance(100))
+        .force('charge', d3.forceManyBody().strength(-280))
+        .force('center', d3.forceCenter(width/2, height/2))
+        .force('collision', d3.forceCollide().radius(d=>(d.size||8)+10));
+    graphSimulation = sim;
+    const link = g.append('g').selectAll('line').data(data.edges).enter().append('line').attr('class','graph-link');
+    const node = g.append('g').selectAll('g').data(data.nodes).enter().append('g').attr('class','graph-node')
+        .call(d3.drag()
+            .on('start',(e,d)=>{ if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+            .on('drag',(e,d)=>{ d.fx=e.x; d.fy=e.y; })
+            .on('end',(e,d)=>{ if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }))
+        .on('click',(e,d)=>{ e.stopPropagation(); loadNote(d.id); });
+    node.append('circle').attr('r',d=>d.size||8).attr('fill','#6d5ef5').attr('stroke','rgba(255,255,255,0.2)').attr('stroke-width',2);
+    node.append('text').attr('dy',d=>(d.size||8)+14).attr('text-anchor','middle')
+        .text(d=>d.title?.length>22?d.title.slice(0,22)+'…':d.title)
+        .attr('font-size','11px').attr('fill','rgba(255,255,255,0.7)').attr('font-family','Inter,sans-serif');
+    sim.on('tick',()=>{
+        link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+        node.attr('transform',d=>`translate(${d.x},${d.y})`);
+    });
+}
+
+// ════════════════════════════════════════════════════════════
+// Keyboard shortcuts
+// ════════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+    const inInput = ['INPUT','TEXTAREA'].includes(document.activeElement?.tagName)
+        || document.activeElement?.contentEditable === 'true';
+
+    // Cmd/Ctrl+K → command palette
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        document.getElementById('cmdOverlay') ? closeCommandPalette() : showCommandPalette();
+    }
+    // Cmd+S → save if modal open
+    if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (document.getElementById('editorModal')) saveFromModal();
+    }
+    // Cmd+D → toggle dark mode
+    if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
+        e.preventDefault();
+        toggleDarkMode();
+    }
+    // Cmd+. → toggle zen mode
+    if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+        e.preventDefault();
+        toggleZenMode();
+    }
+    // ? → shortcuts cheatsheet (not in input)
+    if (e.key === '?' && !inInput) {
+        e.preventDefault();
+        document.getElementById('shortcutsOverlay') ? document.getElementById('shortcutsOverlay').remove() : showShortcutsModal();
+    }
+    // Esc → close topmost overlay
+    if (e.key === 'Escape') {
+        if (document.getElementById('shortcutsOverlay')) { document.getElementById('shortcutsOverlay').remove(); return; }
+        if (document.getElementById('cmdOverlay')) { closeCommandPalette(); return; }
+        if (document.getElementById('editorModal')) { closeEditorModal(); return; }
+        if (zenMode) { toggleZenMode(); return; }
+        // Close any open export menus
+        document.querySelectorAll('.export-wrap.open').forEach(el => el.classList.remove('open'));
+    }
+});
+
+// ════════════════════════════════════════════════════════════
+// Resize helpers
+// ════════════════════════════════════════════════════════════
+
+// Generic horizontal drag resize between two elements
+function makeResizable(handle, getLeft, getRight, minLeft = 200, minRight = 200) {
+    handle.addEventListener('mousedown', e => {
+        e.preventDefault();
+        const leftEl  = getLeft();
+        const rightEl = getRight();
+        if (!leftEl || !rightEl) return;
+
+        const startX      = e.clientX;
+        const leftStart   = leftEl.getBoundingClientRect().width;
+        const totalWidth  = leftEl.parentElement.getBoundingClientRect().width;
+        const maxLeft     = totalWidth - minRight;
+
+        // Right pane becomes fluid so its LEFT edge tracks the handle
+        rightEl.style.flex = '1 1 0';
+
+        handle.classList.add('dragging');
+        document.body.classList.add('resizing');
+
+        const onMove = e => {
+            const dx      = e.clientX - startX;
+            const newLeft = Math.max(minLeft, Math.min(maxLeft, leftStart + dx));
+            leftEl.style.flex = `0 0 ${newLeft}px`;
+        };
+
+        const onUp = () => {
+            handle.classList.remove('dragging');
+            document.body.classList.remove('resizing');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+
+    // Touch support
+    handle.addEventListener('touchstart', e => {
+        e.preventDefault();
+        const leftEl  = getLeft();
+        const rightEl = getRight();
+        if (!leftEl || !rightEl) return;
+
+        const startX     = e.touches[0].clientX;
+        const leftStart  = leftEl.getBoundingClientRect().width;
+        const totalWidth = leftEl.parentElement.getBoundingClientRect().width;
+        const maxLeft    = totalWidth - minRight;
+
+        handle.classList.add('dragging');
+        rightEl.style.flex = '1 1 0';
+
+        const onMove = e => {
+            const dx      = e.touches[0].clientX - startX;
+            const newLeft = Math.max(minLeft, Math.min(maxLeft, leftStart + dx));
+            leftEl.style.flex = `0 0 ${newLeft}px`;
+        };
+
+        const onEnd = () => {
+            handle.classList.remove('dragging');
+            handle.removeEventListener('touchmove', onMove);
+            handle.removeEventListener('touchend', onEnd);
+        };
+
+        handle.addEventListener('touchmove', onMove, { passive: false });
+        handle.addEventListener('touchend', onEnd);
+    }, { passive: false });
+}
+
+// Insert resize handles between all open panes
+function addPaneResizeHandles() {
+    const container = document.getElementById('panesContainer');
+    if (!container) return;
+
+    // Always purge stale handles first to prevent duplicates
+    container.querySelectorAll('.pane-resize-handle').forEach(h => h.remove());
+
+    const panes = [...container.querySelectorAll('.note-pane')];
+    panes.forEach((pane, i) => {
+        if (i === panes.length - 1) return;
+        const handle = document.createElement('div');
+        handle.className = 'pane-resize-handle';
+        pane.after(handle);
+
+        // Skip over any non-pane siblings (other handles etc.)
+        const leftPane  = () => {
+            let el = handle.previousElementSibling;
+            while (el && !el.classList.contains('note-pane')) el = el.previousElementSibling;
+            return el;
+        };
+        const rightPane = () => {
+            let el = handle.nextElementSibling;
+            while (el && !el.classList.contains('note-pane')) el = el.nextElementSibling;
+            return el;
+        };
+
+        makeResizable(handle, leftPane, rightPane, 280, 280);
+    });
+}
+
+// Add resize handle inside the editor modal split
+function addEditorResizeHandle() {
+    const editorPane  = document.querySelector('#editorModal .editor-pane');
+    const previewPane = document.querySelector('#editorModal .preview-pane');
+    const split       = document.querySelector('#editorModal .editor-split');
+    if (!editorPane || !previewPane || !split) return;
+
+    const handle = document.createElement('div');
+    handle.className = 'editor-resize-handle';
+    editorPane.after(handle);
+    makeResizable(handle, () => editorPane, () => previewPane, 180, 180);
+}
+
+// Sidebar resize
+function initSidebarResize() {
+    const sidebar = document.querySelector('.sidebar');
+    const handle  = document.getElementById('sidebarResizeHandle');
+    if (!sidebar || !handle) return;
+
+    makeResizable(
+        handle,
+        () => sidebar,
+        () => document.getElementById('panesContainer'),
+        180, 320
+    );
+}
+
+// ════════════════════════════════════════════════════════════
+// Stars / pinned notes
+// ════════════════════════════════════════════════════════════
+function toggleStar(noteId, e) {
+    if (e) e.stopPropagation();
+    if (starredNotes.has(noteId)) {
+        starredNotes.delete(noteId);
+    } else {
+        starredNotes.add(noteId);
+    }
+    localStorage.setItem('synote_starred', JSON.stringify([...starredNotes]));
+    // Update star buttons across all open panes for this note
+    openPanes.forEach(p => {
+        if (p.note.id !== noteId) return;
+        const btn = document.querySelector(`#pane-${p.uid} .star-btn`);
+        if (btn) {
+            const s = starredNotes.has(noteId);
+            btn.classList.toggle('starred', s);
+            btn.title = s ? 'Unstar' : 'Star note';
+            btn.textContent = s ? '⭐' : '☆';
+        }
+    });
+    renderNotesList();
+}
+
+// ════════════════════════════════════════════════════════════
+// Word count
+// ════════════════════════════════════════════════════════════
+function getWordCount(content) {
+    return (content || '')
+        .replace(/```[\s\S]*?```/g, '')   // strip code blocks
+        .replace(/`[^`]*`/g, '')           // strip inline code
+        .replace(/[#*_~\[\]>]/g, '')       // strip markdown syntax
+        .trim().split(/\s+/).filter(Boolean).length;
+}
+
+// ════════════════════════════════════════════════════════════
+// Inline rename
+// ════════════════════════════════════════════════════════════
+function startRenameInPane(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    const el = document.querySelector(`#pane-${paneUid} .pane-title-label`);
+    if (!el || el.contentEditable === 'true') return;
+
+    const original = pane.note.title;
+    el.contentEditable = 'true';
+    el.style.cssText += ';background:var(--accent-light);border-radius:3px;padding:1px 5px;outline:1px solid var(--accent);';
+    el.focus();
+
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+
+    const finish = async () => {
+        if (el.contentEditable !== 'true') return;
+        el.contentEditable = 'false';
+        el.style.background = '';
+        el.style.outline = '';
+        el.style.padding = '';
+        el.style.borderRadius = '';
+        const newTitle = el.textContent.trim();
+        if (!newTitle || newTitle === original) { el.textContent = original; return; }
+        try {
+            const res = await apiCall(`/notes/${pane.note.id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ title: newTitle, content: pane.note.content })
             });
+            const updated = await res.json();
+            noteCache.set(updated.id, updated);
+            pane.note = updated;
+            currentNote = updated;
+            await loadNotes();
+            renderPaneContent(pane);
+            showNotification('Renamed!', 'success');
+        } catch {
+            el.textContent = original;
+            showNotification('Rename failed', 'error');
         }
-    </script>
+    };
+
+    el.onblur = finish;
+    el.onkeydown = e => {
+        if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+        if (e.key === 'Escape') { el.textContent = original; el.contentEditable = 'false'; el.onblur = null; el.style.cssText = ''; }
+    };
+}
+
+// ════════════════════════════════════════════════════════════
+// Zen / focus mode
+// ════════════════════════════════════════════════════════════
+function toggleZenMode() {
+    zenMode = !zenMode;
+    document.body.classList.toggle('zen', zenMode);
+    document.getElementById('zenToggle').style.opacity = zenMode ? '1' : '';
+    document.getElementById('zenToggle').style.color = zenMode ? 'var(--accent)' : '';
+    showNotification(zenMode ? 'Zen mode — hover pane for controls' : 'Zen mode off', 'info');
+}
+
+// ════════════════════════════════════════════════════════════
+// Shortcuts cheatsheet
+// ════════════════════════════════════════════════════════════
+function showShortcutsModal() {
+    if (document.getElementById('shortcutsOverlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'shortcutsOverlay';
+    overlay.className = 'shortcuts-overlay';
+    const row = (desc, ...keys) =>
+        `<div class="shortcut-row"><span class="shortcut-desc">${desc}</span><div class="shortcut-keys">${keys.map(k=>`<kbd class="shortcut-key">${k}</kbd>`).join('')}</div></div>`;
+    overlay.innerHTML = `
+        <div class="shortcuts-modal">
+            <h2>⌨ Keyboard Shortcuts</h2>
+            <div class="shortcuts-group">
+                <div class="shortcuts-group-title">Navigation</div>
+                ${row('Command palette','⌘','K')}
+                ${row('Show shortcuts','?')}
+                ${row('Close overlay / exit zen','Esc')}
+            </div>
+            <div class="shortcuts-group">
+                <div class="shortcuts-group-title">Editing</div>
+                ${row('Save note','⌘','S')}
+                ${row('Rename pane title','dbl-click title')}
+            </div>
+            <div class="shortcuts-group">
+                <div class="shortcuts-group-title">View</div>
+                ${row('Toggle dark mode','⌘','D')}
+                ${row('Zen / focus mode','⌘','.')}
+            </div>
+            <div style="text-align:center;margin-top:12px;">
+                <button class="btn" onclick="document.getElementById('shortcutsOverlay').remove()">Close</button>
+            </div>
+        </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+}
+
+// ════════════════════════════════════════════════════════════
+// Search highlight helper
+// ════════════════════════════════════════════════════════════
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function highlightMatch(text, query) {
+    const escaped = escapeHtml(text);
+    if (!query) return escaped;
+    return escaped.replace(new RegExp(`(${escapeRegex(escapeHtml(query))})`, 'gi'), '<mark class="sh">$1</mark>');
+}
+
+// ════════════════════════════════════════════════════════════
+// Start
+// ════════════════════════════════════════════════════════════
+init();
+</script>
 </body>
 </html>
