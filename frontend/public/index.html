@@ -440,6 +440,39 @@
         .toc-item[data-level="3"] { padding-left: 24px; font-size: 12.5px; }
         .toc-item[data-level="4"] { padding-left: 36px; font-size: 12px; color: var(--text-muted); }
 
+        /* ── Mini-graph (in pane) ───────────────────────────────── */
+        .pane-mini-graph {
+            margin-top: 32px; padding-top: 20px;
+            border-top: 1px solid var(--border-light);
+        }
+        .pane-mini-graph-title {
+            font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.6px; color: var(--text-muted); margin-bottom: 8px;
+        }
+        .pane-mini-graph svg { width: 100%; height: 160px; background: #0d0d1a; border-radius: var(--radius-md); }
+
+        /* ── Reminder badge ──────────────────────────────────────── */
+        .reminder-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            background: rgba(245,166,35,0.15); color: #f5a623;
+            border: 1px solid rgba(245,166,35,0.3);
+            border-radius: 20px; padding: 2px 8px; font-size: 11px;
+            margin-left: 8px; cursor: pointer;
+        }
+        .reminder-badge:hover { background: rgba(245,166,35,0.25); }
+
+        /* ── Table editor ────────────────────────────────────────── */
+        .preview-content td.editing, .preview-content th.editing {
+            padding: 0 !important;
+            background: var(--accent-light) !important;
+            outline: 2px solid var(--accent);
+        }
+        .preview-content td.editing input, .preview-content th.editing input {
+            width: 100%; border: none; outline: none; padding: 7px 12px;
+            background: transparent; font-size: 13.5px; font-family: var(--font);
+            color: var(--text-primary);
+        }
+
         /* ── Backlinks (in pane) ────────────────────────────────── */
         .pane-backlinks-section {
             margin-top: 40px;
@@ -1493,6 +1526,7 @@ function init() {
     document.getElementById('sortSelect').value = sortOrder;
     initSidebarResize();
     initSwipeGesture();
+    initReminders();
     loadNotes();
 }
 
@@ -1880,6 +1914,7 @@ function buildPaneShell(pane) {
                 <span style="font-size:11px;color:var(--text-muted);">${updated}</span>
                 <button class="star-btn ${isStarred ? 'starred' : ''}" onclick="toggleStar('${note.id}',event)" title="${isStarred ? 'Unstar' : 'Star note'}">${isStarred ? '⭐' : '☆'}</button>
                 <button class="btn-icon" onclick="duplicateNote('${uid}')" title="Duplicate note">⧉</button>
+                <button class="btn-icon" onclick="editReminder('${uid}')" title="Set reminder">⏰</button>
                 <button class="btn-icon lock-btn" onclick="toggleLockNote('${note.id}')" title="${isLocked ? 'Unlock note' : 'Lock note'}">${isLocked ? '🔒' : '🔓'}</button>
                 <button class="btn-icon" onclick="toggleFindBar('${uid}')" title="Find in note (⌘F)">🔍</button>
                 <button class="btn btn-primary" style="font-size:11.5px;padding:3px 9px;${isLocked ? 'opacity:0.4;pointer-events:none;' : ''}" onclick="openEditorModal('${uid}')">Edit</button>
@@ -1923,11 +1958,23 @@ function populatePaneBody(pane) {
     const wc = getWordCount(note.content);
     const readMin = Math.max(1, Math.round(wc / 200));
 
+    const reminder = getReminder(note.id);
+    const reminderBadge = reminder
+        ? `<span class="reminder-badge" onclick="editReminder('${uid}')" title="Reminder set">⏰ ${new Date(reminder).toLocaleDateString()}</span>`
+        : '';
+
     body.innerHTML = `
-        <div class="pane-note-title">${escapeHtml(note.title)}</div>
+        <div style="display:flex;align-items:baseline;flex-wrap:wrap;gap:4px;">
+            <div class="pane-note-title">${escapeHtml(note.title)}</div>
+            ${reminderBadge}
+        </div>
         <div class="tags-display" id="tags-${uid}"></div>
         ${tocHtml}
         <div class="preview-content" id="preview-${uid}"></div>
+        <div class="pane-mini-graph" id="mini-graph-${uid}">
+            <div class="pane-mini-graph-title">Connections</div>
+            <svg id="mini-svg-${uid}"></svg>
+        </div>
         <div class="pane-backlinks-section">
             <div class="pane-backlinks-title">Linked References</div>
             <div id="backlinks-${uid}"><div style="font-size:12.5px;color:var(--text-muted);">Loading…</div></div>
@@ -1953,6 +2000,8 @@ function populatePaneBody(pane) {
     renderMarkdownInto(`preview-${uid}`, note.content, uid);
     updateTagsDisplayFor(`tags-${uid}`, note.content, uid);
     loadAndRenderBacklinksFor(uid, note.id);
+    loadMiniGraph(uid, note.id);
+    applyTableEditor(`preview-${uid}`, uid);
 
     // Reading progress bar
     const progressBar = document.getElementById(`pane-progress-${uid}`);
@@ -3813,6 +3862,205 @@ function toggleFolderView() {
     if (btn) { btn.style.opacity = folderViewOpen ? '1' : ''; btn.style.color = folderViewOpen ? 'var(--accent)' : ''; }
     if (folderViewOpen) renderFolderView();
     else renderNotesList();
+}
+
+// ════════════════════════════════════════════════════════════
+// Mini-graph per pane
+// ════════════════════════════════════════════════════════════
+async function loadMiniGraph(paneUid, noteId) {
+    try {
+        const res = await apiCall('/graph');
+        if (!res.ok) return;
+        const data = await res.json();
+        renderMiniGraph(paneUid, noteId, data);
+    } catch {}
+}
+
+function renderMiniGraph(paneUid, noteId, data) {
+    const svgEl = document.getElementById(`mini-svg-${paneUid}`);
+    if (!svgEl || !data.nodes?.length) {
+        document.getElementById(`mini-graph-${paneUid}`)?.style.setProperty('display','none');
+        return;
+    }
+
+    // Find connected nodes
+    const connected = new Set([noteId]);
+    (data.edges||[]).forEach(e => {
+        const s = e.source?.id ?? e.source, t = e.target?.id ?? e.target;
+        if (s === noteId) connected.add(t);
+        if (t === noteId) connected.add(s);
+    });
+
+    if (connected.size <= 1) { document.getElementById(`mini-graph-${paneUid}`)?.style.setProperty('display','none'); return; }
+
+    const subNodes = data.nodes.filter(n => connected.has(n.id));
+    const subEdges = (data.edges||[]).filter(e => {
+        const s = e.source?.id ?? e.source, t = e.target?.id ?? e.target;
+        return connected.has(s) && connected.has(t);
+    });
+
+    const svg = d3.select(svgEl);
+    svg.selectAll('*').remove();
+    const w = svgEl.getBoundingClientRect().width || 300, h = 160;
+    svg.attr('viewBox', `0 0 ${w} ${h}`);
+
+    const sim = d3.forceSimulation(subNodes)
+        .force('link', d3.forceLink(subEdges).id(d=>d.id).distance(55))
+        .force('charge', d3.forceManyBody().strength(-120))
+        .force('center', d3.forceCenter(w/2, h/2))
+        .force('collision', d3.forceCollide(18));
+
+    const link = svg.append('g').selectAll('line').data(subEdges).enter().append('line')
+        .attr('stroke','rgba(109,94,245,0.4)').attr('stroke-width',1.5);
+
+    const node = svg.append('g').selectAll('g').data(subNodes).enter().append('g')
+        .style('cursor','pointer')
+        .on('click', (e,d) => { if (d.id !== noteId) navigateInPane(paneUid, d.id); });
+
+    node.append('circle')
+        .attr('r', d => d.id === noteId ? 10 : 6)
+        .attr('fill', d => d.id === noteId ? 'var(--accent)' : '#888')
+        .attr('stroke','rgba(255,255,255,0.2)').attr('stroke-width',1.5);
+
+    node.append('text')
+        .attr('dy', d => (d.id===noteId?10:6)+11).attr('text-anchor','middle')
+        .text(d => d.title?.length>14 ? d.title.slice(0,14)+'…' : d.title)
+        .attr('font-size','9px').attr('fill','rgba(255,255,255,0.65)').attr('font-family','Inter,sans-serif');
+
+    sim.on('tick', () => {
+        link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
+        node.attr('transform',d=>`translate(${d.x},${d.y})`);
+    });
+}
+
+// ════════════════════════════════════════════════════════════
+// Reminders
+// ════════════════════════════════════════════════════════════
+function getReminder(noteId) {
+    const r = localStorage.getItem(`synote_reminder_${noteId}`);
+    return r ? parseInt(r) : null;
+}
+
+function editReminder(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    const existing = getReminder(pane.note.id);
+    const existingStr = existing ? new Date(existing).toISOString().slice(0,16) : '';
+
+    const dialog = document.createElement('div');
+    dialog.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(6px);z-index:3000;display:flex;align-items:center;justify-content:center;';
+    dialog.innerHTML = `
+        <div style="background:var(--content-bg);border:1px solid var(--border);border-radius:12px;padding:22px 24px;width:320px;box-shadow:var(--shadow-lg);">
+            <h3 style="font-size:14px;font-weight:700;margin-bottom:14px;">⏰ Set reminder</h3>
+            <input type="datetime-local" id="reminderInput" value="${existingStr}"
+                style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--content-bg);color:var(--text-primary);margin-bottom:12px;font-family:var(--font);outline:none;">
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-primary" style="flex:1;" onclick="saveReminder('${paneUid}')">Set</button>
+                ${existing ? `<button class="btn btn-danger" onclick="clearReminder('${paneUid}')">Clear</button>` : ''}
+                <button class="btn" onclick="this.closest('[style]').remove()">Cancel</button>
+            </div>
+        </div>`;
+    dialog.addEventListener('click', e => { if (e.target === dialog) dialog.remove(); });
+    document.body.appendChild(dialog);
+    document.getElementById('reminderInput').focus();
+}
+
+function saveReminder(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    const val = document.getElementById('reminderInput').value;
+    if (!val) return;
+    const ts = new Date(val).getTime();
+    localStorage.setItem(`synote_reminder_${pane.note.id}`, ts);
+    document.querySelector('[style*="inset:0"]')?.remove();
+    renderPaneContent(pane);
+    scheduleReminderNotification(pane.note.id, pane.note.title, ts);
+    showNotification('Reminder set', 'success');
+}
+
+function clearReminder(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    localStorage.removeItem(`synote_reminder_${pane.note.id}`);
+    document.querySelector('[style*="inset:0"]')?.remove();
+    renderPaneContent(pane);
+    showNotification('Reminder cleared', 'info');
+}
+
+function scheduleReminderNotification(noteId, title, ts) {
+    const delay = ts - Date.now();
+    if (delay <= 0) return;
+    setTimeout(async () => {
+        if (Notification.permission === 'granted') {
+            new Notification(`⏰ Reminder: ${title}`, { body: 'Your Synote reminder is due.', icon: '' });
+        } else {
+            showNotification(`⏰ Reminder: ${title}`, 'info');
+        }
+    }, delay);
+}
+
+function initReminders() {
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+    // Re-schedule any pending reminders
+    notes.forEach(note => {
+        const ts = getReminder(note.id);
+        if (ts && ts > Date.now()) scheduleReminderNotification(note.id, note.title, ts);
+    });
+}
+
+// ════════════════════════════════════════════════════════════
+// Inline table editor
+// ════════════════════════════════════════════════════════════
+function applyTableEditor(previewId, paneUid) {
+    const preview = document.getElementById(previewId);
+    if (!preview) return;
+    preview.querySelectorAll('table td, table th').forEach(cell => {
+        cell.style.cursor = 'text';
+        cell.addEventListener('dblclick', e => {
+            if (cell.classList.contains('editing')) return;
+            const original = cell.textContent;
+            cell.classList.add('editing');
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = original;
+            cell.textContent = '';
+            cell.appendChild(input);
+            input.focus();
+            input.select();
+
+            const finish = async () => {
+                const newVal = input.value;
+                cell.classList.remove('editing');
+                cell.textContent = newVal;
+                if (newVal === original) return;
+                // Update markdown source
+                const pane = openPanes.find(p => p.uid === paneUid);
+                if (!pane) return;
+                const updated = pane.note.content.replace(
+                    new RegExp(`(\\|[^|\\n]*\\|[^|\\n]*\\|[^\\n]*)${escapeRegex(original)}([^|\\n]*)`, 'g'),
+                    `$1${newVal}$2`
+                );
+                if (updated === pane.note.content) return;
+                try {
+                    const res = await apiCall(`/notes/${pane.note.id}`, {
+                        method: 'PUT', body: JSON.stringify({ title: pane.note.title, content: updated })
+                    });
+                    if (!res.ok) throw new Error();
+                    const saved = await res.json();
+                    noteCache.set(saved.id, saved); pane.note = saved; currentNote = saved;
+                } catch { showNotification('Table save failed', 'error'); }
+            };
+
+            input.onblur = finish;
+            input.onkeydown = e => {
+                if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); input.blur(); }
+                if (e.key === 'Escape') { input.value = original; input.blur(); }
+            };
+        });
+    });
 }
 
 // ════════════════════════════════════════════════════════════
