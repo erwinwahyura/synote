@@ -435,7 +435,8 @@
             text-overflow: ellipsis;
         }
 
-        .toc-item:hover { color: var(--accent); }
+        .toc-item:hover, .toc-item.toc-active { color: var(--accent); }
+        .toc-item.toc-active { font-weight: 600; border-left: 2px solid var(--accent); padding-left: 6px; margin-left: -8px; }
         .toc-item[data-level="2"] { padding-left: 12px; }
         .toc-item[data-level="3"] { padding-left: 24px; font-size: 12.5px; }
         .toc-item[data-level="4"] { padding-left: 36px; font-size: 12px; color: var(--text-muted); }
@@ -826,6 +827,7 @@
         .cmd-item-date { font-size: 11px; color: var(--text-muted); }
 
         .cmd-empty { padding: 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+        .cmd-section-label { padding: 5px 18px 3px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--text-muted); }
 
         .cmd-footer {
             padding: 8px 18px;
@@ -865,6 +867,20 @@
         .wp-body code { font-size: 10.5px; }
         .wp-body pre { padding: 6px 8px; font-size: 10.5px; border-radius: 4px; }
         .wp-body ul, .wp-body ol { padding-left: 14px; margin-bottom: 4px; }
+
+        /* ── Bulk action bar ─────────────────────────────────────── */
+        .bulk-action-bar {
+            position: sticky; bottom: 0;
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 12px;
+            background: var(--content-bg);
+            border-top: 1px solid var(--border);
+            font-size: 12px; color: var(--text-muted);
+        }
+        .bulk-action-bar .btn { font-size: 11.5px; padding: 3px 8px; }
+        .bulk-action-bar .btn-danger { background: var(--danger); color: white; border-color: var(--danger); }
+        .note-item.bulk-selected { background: var(--accent-dim); }
+        .note-item.bulk-selected .note-item-title { color: var(--accent); }
 
         /* ── Pane drag-to-reorder ────────────────────────────────── */
         .note-pane.drag-over { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -1464,6 +1480,12 @@
     </div>
     <div class="search-results-info" id="searchInfo" style="display:none;"></div>
     <div class="notes-list" id="notesList"></div>
+    <div class="bulk-action-bar" id="bulkBar" style="display:none;">
+        <span id="bulkCount">0 selected</span>
+        <button class="btn" onclick="bulkPin()" title="Pin selected">⭐ Pin</button>
+        <button class="btn btn-danger" onclick="bulkDelete()" title="Delete selected">🗑 Delete</button>
+        <button class="btn" onclick="clearBulkSelect()">✕</button>
+    </div>
 </div>
 
 <!-- ── Sidebar resize handle ──────────────────────────────── -->
@@ -1527,7 +1549,15 @@ function init() {
     initSidebarResize();
     initSwipeGesture();
     initReminders();
-    loadNotes();
+    loadNotes().then(() => {
+        // Handle permalink: #note-<uuid>
+        const hash = location.hash;
+        if (hash.startsWith('#note-')) {
+            const noteId = hash.slice(6);
+            const note = notes.find(n => n.id === noteId);
+            if (note) loadNote(noteId);
+        }
+    });
 }
 
 function initSwipeGesture() {
@@ -1616,6 +1646,71 @@ async function submitToken() {
 // ════════════════════════════════════════════════════════════
 // Notes list & sorting
 // ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// Bulk select
+// ════════════════════════════════════════════════════════════
+let bulkSelected = new Set();
+
+function toggleBulkSelect(noteId, el) {
+    if (bulkSelected.has(noteId)) {
+        bulkSelected.delete(noteId);
+        el.classList.remove('bulk-selected');
+    } else {
+        bulkSelected.add(noteId);
+        el.classList.add('bulk-selected');
+    }
+    const bar = document.getElementById('bulkBar');
+    if (bulkSelected.size > 0) {
+        bar.style.display = 'flex';
+        document.getElementById('bulkCount').textContent = `${bulkSelected.size} selected`;
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+function handleNoteItemClick(event, noteId, el) {
+    if (event.shiftKey || bulkSelected.size > 0 && event.metaKey) {
+        event.preventDefault();
+        toggleBulkSelect(noteId, el);
+    } else if (bulkSelected.size > 0) {
+        // If bulk mode active and no modifier, toggle this item
+        toggleBulkSelect(noteId, el);
+    } else {
+        loadNote(noteId);
+    }
+}
+
+function clearBulkSelect() {
+    bulkSelected.clear();
+    document.querySelectorAll('.note-item.bulk-selected').forEach(el => el.classList.remove('bulk-selected'));
+    document.getElementById('bulkBar').style.display = 'none';
+}
+
+function bulkPin() {
+    const count = bulkSelected.size;
+    bulkSelected.forEach(id => starredNotes.add(id));
+    localStorage.setItem('synote_starred', JSON.stringify([...starredNotes]));
+    clearBulkSelect();
+    renderNotesList();
+    showNotification(`Pinned ${count} note${count !== 1 ? 's' : ''}`, 'success');
+}
+
+async function bulkDelete() {
+    if (!confirm(`Delete ${bulkSelected.size} note(s)? This cannot be undone.`)) return;
+    const ids = [...bulkSelected];
+    clearBulkSelect();
+    for (const id of ids) {
+        try {
+            await apiCall(`/notes/${id}`, { method: 'DELETE' });
+            noteCache.delete(id);
+            openPanes = openPanes.filter(p => p.note.id !== id);
+        } catch { /* continue */ }
+    }
+    await loadNotes();
+    renderPanes();
+    showNotification('Deleted', 'success');
+}
+
 async function loadNotes() {
     try {
         const res = await apiCall('/notes');
@@ -1665,7 +1760,7 @@ function renderNotesList() {
             html += `<div class="list-section-label">⭐ Pinned</div>`;
             pinned.forEach(note => {
                 const active = openIds.has(note.id);
-                html += `<div class="note-item ${active ? 'active' : ''}" onclick="loadNote('${note.id}')">
+                html += `<div class="note-item ${active ? 'active' : ''} ${bulkSelected.has(note.id)?'bulk-selected':''}" onclick="handleNoteItemClick(event,'${note.id}',this)">
                     <div class="note-item-title">${escapeHtml(note.title || 'Untitled')}</div>
                     <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
                 </div>`;
@@ -1677,7 +1772,7 @@ function renderNotesList() {
             html += `<div class="list-section-label"${pinned.length ? ' style="margin-top:4px;"' : ''}>Recently viewed</div>`;
             recentlyViewed.slice(0, 5).forEach(r => {
                 const active = openIds.has(r.id);
-                html += `<div class="note-item ${active ? 'active' : ''}" onclick="loadNote('${r.id}')">
+                html += `<div class="note-item ${active ? 'active' : ''}" onclick="handleNoteItemClick(event,'${r.id}',this)">
                     <div class="note-item-title">${escapeHtml(r.title)}</div>
                 </div>`;
             });
@@ -1698,7 +1793,7 @@ function renderNotesList() {
                 const snippet = extractSnippet(note.content, searchQuery);
                 snippetHtml = `<div class="note-item-snippet">${snippet}</div>${badge}`;
             }
-            html += `<div class="note-item ${active ? 'active' : ''}" onclick="loadNote('${note.id}')">
+            html += `<div class="note-item ${active ? 'active' : ''} ${bulkSelected.has(note.id)?'bulk-selected':''}" onclick="handleNoteItemClick(event,'${note.id}',this)">
                 <div class="note-item-title">${titleHtml}</div>
                 ${snippetHtml}
                 <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
@@ -1925,6 +2020,8 @@ function buildPaneShell(pane) {
                     <button class="btn-icon" onclick="toggleExportMenu('${uid}')" title="Export">⬇</button>
                     <div class="export-menu">
                         <button class="export-item" onclick="exportMarkdown('${uid}')">📄 Markdown</button>
+                        <button class="export-item" onclick="exportHTML('${uid}')">🌐 HTML</button>
+                        <button class="export-item" onclick="copyPermalink('${uid}')">🔗 Copy link</button>
                         <button class="export-item" onclick="exportPDF('${uid}')">🖨 Print / PDF</button>
                     </div>
                 </div>
@@ -2003,13 +2100,25 @@ function populatePaneBody(pane) {
     loadMiniGraph(uid, note.id);
     applyTableEditor(`preview-${uid}`, uid);
 
-    // Reading progress bar
+    // Reading progress bar + scrollspy TOC
     const progressBar = document.getElementById(`pane-progress-${uid}`);
     body.addEventListener('scroll', () => {
-        if (!progressBar) return;
-        const pct = body.scrollHeight <= body.clientHeight ? 0
-            : (body.scrollTop / (body.scrollHeight - body.clientHeight)) * 100;
-        progressBar.style.width = pct + '%';
+        if (progressBar) {
+            const pct = body.scrollHeight <= body.clientHeight ? 0
+                : (body.scrollTop / (body.scrollHeight - body.clientHeight)) * 100;
+            progressBar.style.width = pct + '%';
+        }
+        // Scrollspy: highlight active TOC item
+        const headings = body.querySelectorAll('[id^="h-"]');
+        if (headings.length === 0) return;
+        let active = headings[0].id;
+        headings.forEach(h => {
+            if (h.offsetTop - body.scrollTop <= 60) active = h.id;
+        });
+        document.querySelectorAll(`#toc-${uid} .toc-item`).forEach(item => {
+            const isActive = item.getAttribute('onclick')?.includes(`'${active}'`);
+            item.classList.toggle('toc-active', !!isActive);
+        });
     }, { passive: true });
 }
 
@@ -2531,6 +2640,59 @@ function exportPDF(paneUid) {
     allPanes.forEach(el => el.style.display = '');
 }
 
+function exportHTML(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    const { note } = pane;
+    const preview = document.getElementById(`preview-${paneUid}`);
+    const bodyHtml = preview ? preview.innerHTML : marked.parse(note.content);
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${escapeHtml(note.title)}</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:780px;margin:40px auto;padding:0 24px;line-height:1.7;color:#1a1a2e;}
+  h1,h2,h3,h4{color:#1a1a2e;margin-top:1.5em;}
+  pre{background:#f0f0f6;padding:12px 16px;border-radius:6px;overflow-x:auto;}
+  code{font-family:'Fira Code',monospace;font-size:0.88em;}
+  blockquote{border-left:3px solid #6d5ef5;margin:0;padding-left:16px;color:#555;}
+  table{border-collapse:collapse;width:100%;}
+  th,td{border:1px solid #ddd;padding:8px 12px;}
+  th{background:#f5f5f5;}
+  img{max-width:100%;}
+  a{color:#6d5ef5;}
+  @media(prefers-color-scheme:dark){body{background:#0f0f1a;color:#e0e0f0;}h1,h2,h3,h4{color:#e0e0f0;}pre{background:#1a1a2e;}th{background:#1a1a2e;}blockquote{color:#aaa;}}
+</style>
+</head>
+<body>
+<h1>${escapeHtml(note.title)}</h1>
+${bodyHtml}
+<hr>
+<footer style="font-size:12px;color:#888;margin-top:24px;">Exported from Synote · ${new Date().toLocaleDateString()}</footer>
+</body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${note.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.html`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    document.getElementById(`export-${paneUid}`)?.classList.remove('open');
+}
+
+function copyPermalink(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    const url = `${location.origin}${location.pathname}#note-${pane.note.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+        showNotification('Link copied!', 'success');
+    }).catch(() => {
+        showNotification(url, 'info');
+    });
+    document.getElementById(`export-${paneUid}`)?.classList.remove('open');
+}
+
 // ════════════════════════════════════════════════════════════
 // Command Palette
 // ════════════════════════════════════════════════════════════
@@ -2570,46 +2732,103 @@ function closeCommandPalette() {
     document.getElementById('cmdOverlay')?.remove();
 }
 
+// Actions available in command palette (> prefix)
+const CMD_ACTIONS = [
+    { icon: '📝', label: 'New Note',        hint: '>new',    run: () => createNewNote() },
+    { icon: '🌙', label: 'Toggle Dark Mode', hint: '>dark',   run: () => { darkMode=!darkMode; localStorage.setItem('synote_dark',darkMode); applyDarkMode(); } },
+    { icon: '🧘', label: 'Toggle Zen Mode',  hint: '>zen',    run: () => toggleZenMode() },
+    { icon: '🕸',  label: 'Open Graph',       hint: '>graph',  run: () => { closeCommandPalette(); openGraphView(); } },
+    { icon: '⌨',  label: 'Shortcuts',        hint: '>keys',   run: () => { closeCommandPalette(); showShortcutsModal(); } },
+    { icon: '📊', label: 'Note Stats',       hint: '>stats',  run: () => { const p=openPanes[0]; if(p) showNoteStats(p.uid); } },
+    { icon: '🎨', label: 'Change Accent',    hint: '>accent', run: () => { closeCommandPalette(); document.getElementById('accentPicker')?.click(); } },
+];
+
+let cmdItems = []; // unified list: {type:'note'|'action', data}
+
 function updateCmdResults() {
-    const q = document.getElementById('cmdInput')?.value.toLowerCase() || '';
-    if (q) {
-        cmdFilteredNotes = notes.filter(n => n.title.toLowerCase().includes(q));
+    const raw = document.getElementById('cmdInput')?.value || '';
+    const q = raw.toLowerCase().trim();
+    const isAction = raw.startsWith('>');
+
+    if (isAction) {
+        const aq = q.slice(1);
+        const matched = CMD_ACTIONS.filter(a => a.label.toLowerCase().includes(aq) || a.hint.slice(1).includes(aq));
+        cmdItems = matched.map(a => ({ type: 'action', data: a }));
+    } else if (q) {
+        const noteMatches = notes
+            .filter(n => n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q))
+            .slice(0, 20);
+        cmdItems = noteMatches.map(n => ({ type: 'note', data: n }));
     } else {
-        // Recent notes first, then rest sorted
+        // Default: recent notes + action hint
         const recentIds = recentlyViewed.map(r => r.id);
         const recentNotes = recentIds.map(id => notes.find(n => n.id === id)).filter(Boolean);
         const others = getSortedNotes(notes).filter(n => !recentIds.includes(n.id));
-        cmdFilteredNotes = [...recentNotes, ...others].slice(0, 14);
+        const noteItems = [...recentNotes, ...others].slice(0, 12).map(n => ({ type: 'note', data: n }));
+        const actionItems = CMD_ACTIONS.slice(0, 3).map(a => ({ type: 'action', data: a }));
+        cmdItems = [...actionItems, ...noteItems];
     }
-    cmdSelectedIdx = Math.min(cmdSelectedIdx, Math.max(0, cmdFilteredNotes.length - 1));
+
+    cmdSelectedIdx = Math.min(cmdSelectedIdx, Math.max(0, cmdItems.length - 1));
     renderCmdResults();
 }
 
 function renderCmdResults() {
     const el = document.getElementById('cmdResults');
     if (!el) return;
-    if (cmdFilteredNotes.length === 0) {
-        el.innerHTML = '<div class="cmd-empty">No notes found</div>';
+    if (cmdItems.length === 0) {
+        el.innerHTML = '<div class="cmd-empty">No results — try <kbd style="background:var(--border-light);padding:1px 5px;border-radius:3px;font-size:10px;">&gt;action</kbd> for commands</div>';
         return;
     }
-    el.innerHTML = cmdFilteredNotes.map((n, i) => `
-        <div class="cmd-item ${i === cmdSelectedIdx ? 'selected' : ''}" onclick="selectCmdItem(${i})">
-            <span class="cmd-item-icon">📄</span>
-            <span class="cmd-item-title">${escapeHtml(n.title)}</span>
-            <span class="cmd-item-date">${new Date(n.updated_at).toLocaleDateString()}</span>
-        </div>`
-    ).join('');
+    let html = '';
+    let inNotes = false, inActions = false;
+    cmdItems.forEach((item, i) => {
+        const sel = i === cmdSelectedIdx ? 'selected' : '';
+        if (item.type === 'action' && !inActions) {
+            inActions = true;
+            html += '<div class="cmd-section-label">Actions</div>';
+        }
+        if (item.type === 'note' && !inNotes) {
+            inNotes = true;
+            html += '<div class="cmd-section-label">Notes</div>';
+        }
+        if (item.type === 'action') {
+            html += `<div class="cmd-item ${sel}" onclick="selectCmdItem(${i})">
+                <span class="cmd-item-icon">${item.data.icon}</span>
+                <span class="cmd-item-title">${item.data.label}</span>
+                <span class="cmd-item-date" style="font-family:var(--font-mono);font-size:10px;opacity:0.5;">${item.data.hint}</span>
+            </div>`;
+        } else {
+            const n = item.data;
+            const excerpt = n.content.replace(/[#*`\[\]]/g, '').slice(0, 60);
+            html += `<div class="cmd-item ${sel}" onclick="selectCmdItem(${i})">
+                <span class="cmd-item-icon">📄</span>
+                <div style="flex:1;min-width:0;">
+                    <div class="cmd-item-title">${escapeHtml(n.title)}</div>
+                    <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(excerpt)}</div>
+                </div>
+                <span class="cmd-item-date">${new Date(n.updated_at).toLocaleDateString()}</span>
+            </div>`;
+        }
+    });
+    el.innerHTML = html;
 }
 
 function selectCmdItem(idx) {
-    const note = cmdFilteredNotes[idx];
-    if (note) { loadNote(note.id); closeCommandPalette(); }
+    const item = cmdItems[idx];
+    if (!item) return;
+    closeCommandPalette();
+    if (item.type === 'action') {
+        item.data.run();
+    } else {
+        loadNote(item.data.id);
+    }
 }
 
 function handleCmdKey(e) {
     if (e.key === 'ArrowDown') {
         e.preventDefault();
-        cmdSelectedIdx = Math.min(cmdSelectedIdx + 1, cmdFilteredNotes.length - 1);
+        cmdSelectedIdx = Math.min(cmdSelectedIdx + 1, cmdItems.length - 1);
         renderCmdResults();
         document.querySelectorAll('.cmd-item')[cmdSelectedIdx]?.scrollIntoView({ block: 'nearest' });
     } else if (e.key === 'ArrowUp') {
@@ -3824,7 +4043,7 @@ function renderFolderView() {
         <div class="folder-notes closed" id="${folderId}-notes">`;
         folderNotes.forEach(note => {
             const active = openIds.has(note.id);
-            html += `<div class="note-item ${active?'active':''}" onclick="loadNote('${note.id}')">
+            html += `<div class="note-item ${active?'active':''} ${bulkSelected.has(note.id)?'bulk-selected':''}" onclick="handleNoteItemClick(event,'${note.id}',this)">
                 <div class="note-item-title">${escapeHtml(note.title||'Untitled')}</div>
             </div>`;
         });
@@ -3836,7 +4055,7 @@ function renderFolderView() {
         if (Object.keys(folders).length) html += `<div class="list-section-label">Ungrouped</div>`;
         root.forEach(note => {
             const active = openIds.has(note.id);
-            html += `<div class="note-item ${active?'active':''}" onclick="loadNote('${note.id}')">
+            html += `<div class="note-item ${active?'active':''} ${bulkSelected.has(note.id)?'bulk-selected':''}" onclick="handleNoteItemClick(event,'${note.id}',this)">
                 <div class="note-item-title">${escapeHtml(note.title||'Untitled')}</div>
                 <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
             </div>`;
