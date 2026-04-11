@@ -261,6 +261,7 @@
             overflow: hidden;
             text-overflow: ellipsis;
             margin-bottom: 2px;
+            display: flex; align-items: center;
         }
 
         .note-item.active .note-item-title { color: var(--sidebar-active-text); }
@@ -867,6 +868,27 @@
         .wp-body code { font-size: 10.5px; }
         .wp-body pre { padding: 6px 8px; font-size: 10.5px; border-radius: 4px; }
         .wp-body ul, .wp-body ol { padding-left: 14px; margin-bottom: 4px; }
+
+        /* ── Note color labels ───────────────────────────────────── */
+        .note-color-dot {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; margin-right: 5px; flex-shrink: 0;
+            cursor: pointer; vertical-align: middle;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.15);
+        }
+        .color-picker-popup {
+            position: fixed; z-index: 5000;
+            display: flex; gap: 5px; padding: 8px 10px;
+            background: var(--content-bg); border: 1px solid var(--border);
+            border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+        }
+        .color-swatch {
+            width: 20px; height: 20px; border-radius: 50%; border: 2px solid transparent;
+            cursor: pointer; transition: transform 0.1s;
+        }
+        .color-swatch:hover { transform: scale(1.2); }
+        .color-swatch.active { border-color: white; }
+        .color-swatch.clear { background: var(--border); font-size: 10px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; }
 
         /* ── Editor find & replace ───────────────────────────────── */
         .editor-find-replace {
@@ -1584,6 +1606,7 @@ let darkMode     = localStorage.getItem('synote_dark') === 'true';
 let recentlyViewed = JSON.parse(localStorage.getItem('synote_recent') || '[]'); // [{id,title}]
 let starredNotes = new Set(JSON.parse(localStorage.getItem('synote_starred') || '[]'));
 let lockedNotes  = new Set(JSON.parse(localStorage.getItem('synote_locked') || '[]'));
+const noteColors = JSON.parse(localStorage.getItem('synote_colors') || '{}'); // noteId → color
 let zenMode = false;
 const focusTimers = {}; // uid → { startTs, elapsed, intervalId }
 const noteCache  = new Map(); // noteId -> full note object
@@ -1718,6 +1741,40 @@ function toggleBulkSelect(noteId, el) {
     }
 }
 
+// ════════════════════════════════════════════════════════════
+// Note color labels
+// ════════════════════════════════════════════════════════════
+const NOTE_COLORS = ['#e5534b','#f5a623','#2ea043','#6d5ef5','#58a6ff','#db61a2','',''];
+const NOTE_COLOR_NAMES = ['Red','Orange','Green','Purple','Blue','Pink','Clear',''];
+
+function pickNoteColor(event, noteId) {
+    event.stopPropagation();
+    document.getElementById('colorPickerPopup')?.remove();
+    const popup = document.createElement('div');
+    popup.id = 'colorPickerPopup';
+    popup.className = 'color-picker-popup';
+    popup.innerHTML = NOTE_COLORS.map((c, i) => c
+        ? `<button class="color-swatch ${noteColors[noteId]===c?'active':''}" style="background:${c};" title="${NOTE_COLOR_NAMES[i]}" onclick="setNoteColor('${noteId}','${c}')"></button>`
+        : `<button class="color-swatch clear" title="Clear" onclick="setNoteColor('${noteId}','')">✕</button>`
+    ).join('');
+    const rect = event.target.getBoundingClientRect();
+    popup.style.top = (rect.bottom + 4) + 'px';
+    popup.style.left = rect.left + 'px';
+    document.body.appendChild(popup);
+    setTimeout(() => {
+        const close = e => { if (!popup.contains(e.target)) { popup.remove(); document.removeEventListener('click', close); } };
+        document.addEventListener('click', close);
+    }, 0);
+}
+
+function setNoteColor(noteId, color) {
+    if (color) noteColors[noteId] = color;
+    else delete noteColors[noteId];
+    localStorage.setItem('synote_colors', JSON.stringify(noteColors));
+    document.getElementById('colorPickerPopup')?.remove();
+    renderNotesList();
+}
+
 function handleNoteItemClick(event, noteId, el) {
     if (event.shiftKey || bulkSelected.size > 0 && event.metaKey) {
         event.preventDefault();
@@ -1794,6 +1851,17 @@ function setSortOrder(order) {
     renderNotesList();
 }
 
+function makeNoteItemHtml(note, active, extraHtml = '', showDate = true, titleHtmlOverride = null) {
+    const color = noteColors[note.id];
+    const dot = color ? `<span class="note-color-dot" style="background:${color};" onclick="pickNoteColor(event,'${note.id}')"></span>` : '';
+    const titleHtml = titleHtmlOverride || escapeHtml(note.title || 'Untitled');
+    return `<div class="note-item ${active ? 'active' : ''} ${bulkSelected.has(note.id)?'bulk-selected':''}" onclick="handleNoteItemClick(event,'${note.id}',this)">
+        <div class="note-item-title">${dot}${titleHtml}</div>
+        ${extraHtml}
+        ${showDate ? `<div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>` : ''}
+    </div>`;
+}
+
 function renderNotesList() {
     const list = document.getElementById('notesList');
     const info = document.getElementById('searchInfo');
@@ -1809,11 +1877,7 @@ function renderNotesList() {
         if (pinned.length > 0) {
             html += `<div class="list-section-label">⭐ Pinned</div>`;
             pinned.forEach(note => {
-                const active = openIds.has(note.id);
-                html += `<div class="note-item ${active ? 'active' : ''} ${bulkSelected.has(note.id)?'bulk-selected':''}" onclick="handleNoteItemClick(event,'${note.id}',this)">
-                    <div class="note-item-title">${escapeHtml(note.title || 'Untitled')}</div>
-                    <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
-                </div>`;
+                html += makeNoteItemHtml(note, openIds.has(note.id));
             });
         }
 
@@ -1821,10 +1885,9 @@ function renderNotesList() {
         if (recentlyViewed.length > 0) {
             html += `<div class="list-section-label"${pinned.length ? ' style="margin-top:4px;"' : ''}>Recently viewed</div>`;
             recentlyViewed.slice(0, 5).forEach(r => {
-                const active = openIds.has(r.id);
-                html += `<div class="note-item ${active ? 'active' : ''}" onclick="handleNoteItemClick(event,'${r.id}',this)">
-                    <div class="note-item-title">${escapeHtml(r.title)}</div>
-                </div>`;
+                const note = notes.find(n => n.id === r.id);
+                if (!note) return;
+                html += makeNoteItemHtml(note, openIds.has(r.id), '', false);
             });
             html += `<div class="list-section-label" style="margin-top:4px;">All notes</div>`;
         }
@@ -1835,7 +1898,7 @@ function renderNotesList() {
     } else {
         sorted.forEach(note => {
             const active = openIds.has(note.id);
-            const titleHtml = searchQuery ? highlightMatch(note.title || 'Untitled', searchQuery) : escapeHtml(note.title || 'Untitled');
+            const titleHtml = searchQuery ? highlightMatch(note.title || 'Untitled', searchQuery) : null;
             let snippetHtml = '';
             if (isSearching && searchQuery && note.content) {
                 const titleMatch = (note.title || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -1843,11 +1906,7 @@ function renderNotesList() {
                 const snippet = extractSnippet(note.content, searchQuery);
                 snippetHtml = `<div class="note-item-snippet">${snippet}</div>${badge}`;
             }
-            html += `<div class="note-item ${active ? 'active' : ''} ${bulkSelected.has(note.id)?'bulk-selected':''}" onclick="handleNoteItemClick(event,'${note.id}',this)">
-                <div class="note-item-title">${titleHtml}</div>
-                ${snippetHtml}
-                <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
-            </div>`;
+            html += makeNoteItemHtml(note, active, snippetHtml, true, titleHtml);
         });
     }
 
@@ -4283,10 +4342,7 @@ function renderFolderView() {
         </div>
         <div class="folder-notes closed" id="${folderId}-notes">`;
         folderNotes.forEach(note => {
-            const active = openIds.has(note.id);
-            html += `<div class="note-item ${active?'active':''} ${bulkSelected.has(note.id)?'bulk-selected':''}" onclick="handleNoteItemClick(event,'${note.id}',this)">
-                <div class="note-item-title">${escapeHtml(note.title||'Untitled')}</div>
-            </div>`;
+            html += makeNoteItemHtml(note, openIds.has(note.id), '', false);
         });
         html += `</div>`;
     });
@@ -4295,11 +4351,7 @@ function renderFolderView() {
     if (root.length) {
         if (Object.keys(folders).length) html += `<div class="list-section-label">Ungrouped</div>`;
         root.forEach(note => {
-            const active = openIds.has(note.id);
-            html += `<div class="note-item ${active?'active':''} ${bulkSelected.has(note.id)?'bulk-selected':''}" onclick="handleNoteItemClick(event,'${note.id}',this)">
-                <div class="note-item-title">${escapeHtml(note.title||'Untitled')}</div>
-                <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
-            </div>`;
+            html += makeNoteItemHtml(note, openIds.has(note.id));
         });
     }
 
