@@ -868,6 +868,56 @@
         .wp-body pre { padding: 6px 8px; font-size: 10.5px; border-radius: 4px; }
         .wp-body ul, .wp-body ol { padding-left: 14px; margin-bottom: 4px; }
 
+        /* ── Editor find & replace ───────────────────────────────── */
+        .editor-find-replace {
+            display: flex; align-items: center; gap: 6px;
+            padding: 6px 14px;
+            border-bottom: 1px solid var(--border);
+            background: var(--sidebar-bg);
+            flex-shrink: 0;
+        }
+        .editor-find-replace input {
+            flex: 1; min-width: 0; padding: 4px 8px;
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            background: var(--content-bg); color: var(--text-primary);
+            font-size: 13px; font-family: var(--font);
+        }
+        .editor-find-replace input:focus { outline: none; border-color: var(--accent); }
+        .editor-find-replace .btn { font-size: 11.5px; padding: 3px 8px; flex-shrink: 0; }
+
+        /* ── Note embeds ![[Title]] ──────────────────────────────── */
+        .note-embed {
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            border-radius: var(--radius-md);
+            margin: 12px 0; overflow: hidden;
+        }
+        .note-embed-title {
+            padding: 6px 12px; font-size: 12px; font-weight: 600;
+            background: var(--accent-dim); color: var(--accent);
+            border-bottom: 1px solid var(--border);
+        }
+        .note-embed-body { padding: 12px 16px; font-size: 13.5px; }
+        .note-embed.broken { border-color: var(--danger); color: var(--danger); padding: 8px 12px; font-size: 12.5px; }
+        .note-embed-placeholder { color: var(--text-muted); font-size: 12px; font-style: italic; padding: 6px 0; }
+
+        /* ── Wikilink autocomplete dropdown ─────────────────────── */
+        .wikilink-dropdown {
+            position: absolute; left: 0; bottom: 100%;
+            width: 280px; max-height: 220px; overflow-y: auto;
+            background: var(--content-bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            z-index: 3000;
+        }
+        .wl-item {
+            padding: 7px 14px; font-size: 13px; cursor: pointer;
+            color: var(--text-primary); white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        .wl-item:hover, .wl-item.selected { background: var(--accent-dim); color: var(--accent); }
+
         /* ── Bulk action bar ─────────────────────────────────────── */
         .bulk-action-bar {
             position: sticky; bottom: 0;
@@ -2207,9 +2257,50 @@ function renderMarkdownInto(elementId, content, paneUid) {
     const el = document.getElementById(elementId);
     if (!el) return;
     configureMarked(paneUid);
-    el.innerHTML = renderWikilinks(marked.parse(content || ''), paneUid);
+    // Process note embeds ![[Title]] before rendering
+    const processed = processNoteEmbeds(content || '', paneUid);
+    el.innerHTML = renderWikilinks(marked.parse(processed), paneUid);
     applyCallouts(el);
     applyFoldableHeadings(el);
+    // Async: fill embed placeholders
+    resolveEmbedPlaceholders(el, paneUid);
+}
+
+function processNoteEmbeds(content, paneUid) {
+    // Replace ![[Title]] with a placeholder; actual content filled async
+    return content.replace(/!\[\[([^\]]+)\]\]/g, (match, title) => {
+        const safe = title.replace(/"/g, '&quot;');
+        return `<div class="note-embed-placeholder" data-title="${safe}" data-pane="${paneUid||''}">⏳ Embedding: ${escapeHtml(title)}</div>`;
+    });
+}
+
+async function resolveEmbedPlaceholders(container, paneUid) {
+    const placeholders = container.querySelectorAll('.note-embed-placeholder');
+    for (const ph of placeholders) {
+        const title = ph.dataset.title;
+        const note = notes.find(n => n.title === title);
+        if (!note) {
+            ph.innerHTML = `<div class="note-embed broken">⚠ Note not found: ${escapeHtml(title)}</div>`;
+            continue;
+        }
+        try {
+            let n = noteCache.get(note.id);
+            if (!n) {
+                const res = await apiCall(`/notes/${note.id}`);
+                if (!res.ok) throw new Error();
+                n = await res.json();
+                noteCache.set(n.id, n);
+            }
+            configureMarked(paneUid);
+            const html = marked.parse(n.content || '');
+            ph.outerHTML = `<div class="note-embed">
+                <div class="note-embed-title">📄 ${escapeHtml(n.title)}</div>
+                <div class="note-embed-body">${html}</div>
+            </div>`;
+        } catch {
+            ph.innerHTML = `<div class="note-embed broken">⚠ Failed to load: ${escapeHtml(title)}</div>`;
+        }
+    }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2483,20 +2574,33 @@ function openEditorModal(paneUid) {
                     <input class="modal-title-input" id="modalTitle" value="${escapeHtml(note.title)}" placeholder="Title">
                     <div class="modal-actions">
                         <span class="autosave-status" id="autosaveStatus"></span>
+                        <button class="btn" onclick="toggleEditorFindReplace()" title="Find & replace (⌘H)">⇄ Replace</button>
                         <button class="btn" onclick="toggleHistoryPanel()" title="Version history">🕐 History</button>
                         <button class="btn btn-primary" onclick="saveFromModal()">Save</button>
                         <button class="btn-icon" onclick="closeEditorModal()">✕</button>
                     </div>
                 </div>
+                <div id="editorFindReplace" class="editor-find-replace" style="display:none;">
+                    <input id="frFind" placeholder="Find…" oninput="editorFRHighlight()">
+                    <input id="frReplace" placeholder="Replace…">
+                    <button class="btn" onclick="editorFRReplace()">Replace</button>
+                    <button class="btn" onclick="editorFRReplaceAll()">All</button>
+                    <span id="frCount" style="font-size:11px;color:var(--text-muted);padding:0 6px;"></span>
+                    <button class="btn-icon" onclick="document.getElementById('editorFindReplace').style.display='none'">✕</button>
+                </div>
                 <div class="modal-body">
                     <div class="editor-split">
                         <div class="editor-pane">
                             <div class="editor-pane-header">Markdown</div>
+                            <div style="position:relative;flex:1;display:flex;flex-direction:column;">
                             <textarea class="editor-body" id="modalContent"
-                                oninput="updateModalPreview();scheduleAutosave()"
+                                oninput="updateModalPreview();scheduleAutosave();handleWikilinkAutocomplete(event)"
+                                onkeydown="handleWikilinkKey(event)"
                                 onpaste="handleSmartPaste(event)"
                                 ondragover="event.preventDefault()"
                                 ondrop="handleImageDrop(event)">${escapeHtml(note.content)}</textarea>
+                            <div id="wikilinkDropdown" class="wikilink-dropdown" style="display:none;"></div>
+                            </div>
                         </div>
                         <div class="preview-pane">
                             <div class="editor-pane-header">Preview</div>
@@ -2595,6 +2699,140 @@ function insertAtCursor(textarea, text) {
     const end = textarea.selectionEnd;
     textarea.value = textarea.value.slice(0, start) + text + textarea.value.slice(end);
     textarea.selectionStart = textarea.selectionEnd = start + text.length;
+}
+
+// ════════════════════════════════════════════════════════════
+// Editor find & replace
+// ════════════════════════════════════════════════════════════
+function toggleEditorFindReplace() {
+    const bar = document.getElementById('editorFindReplace');
+    if (!bar) return;
+    const visible = bar.style.display !== 'none';
+    bar.style.display = visible ? 'none' : 'flex';
+    if (!visible) document.getElementById('frFind')?.focus();
+}
+
+function editorFRHighlight() {
+    const q = document.getElementById('frFind')?.value || '';
+    const textarea = document.getElementById('modalContent');
+    const counter = document.getElementById('frCount');
+    if (!textarea || !q) { if (counter) counter.textContent = ''; return; }
+    const matches = [...textarea.value.matchAll(new RegExp(escapeRegex(q), 'gi'))];
+    if (counter) counter.textContent = `${matches.length} match${matches.length !== 1 ? 'es' : ''}`;
+}
+
+function editorFRReplace() {
+    const q = document.getElementById('frFind')?.value || '';
+    const r = document.getElementById('frReplace')?.value || '';
+    const textarea = document.getElementById('modalContent');
+    if (!textarea || !q) return;
+    const pos = textarea.selectionStart;
+    const val = textarea.value;
+    const re = new RegExp(escapeRegex(q), 'i');
+    // Find next from cursor
+    const after = val.slice(pos);
+    const match = re.exec(after);
+    if (match) {
+        const start = pos + match.index;
+        textarea.value = val.slice(0, start) + r + val.slice(start + match[0].length);
+        textarea.selectionStart = start;
+        textarea.selectionEnd = start + r.length;
+    }
+    editorFRHighlight();
+    updateModalPreview();
+}
+
+function editorFRReplaceAll() {
+    const q = document.getElementById('frFind')?.value || '';
+    const r = document.getElementById('frReplace')?.value || '';
+    const textarea = document.getElementById('modalContent');
+    if (!textarea || !q) return;
+    textarea.value = textarea.value.replace(new RegExp(escapeRegex(q), 'gi'), r);
+    editorFRHighlight();
+    updateModalPreview();
+    scheduleAutosave();
+}
+
+function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+// ════════════════════════════════════════════════════════════
+// Wikilink autocomplete in editor
+// ════════════════════════════════════════════════════════════
+let _wlSelectedIdx = 0;
+let _wlMatches = [];
+
+function getWikilinkQuery(textarea) {
+    const val = textarea.value;
+    const pos = textarea.selectionStart;
+    const before = val.slice(0, pos);
+    const m = before.match(/\[\[([^\][\n]*)$/);
+    return m ? m[1] : null;
+}
+
+function handleWikilinkAutocomplete(event) {
+    const textarea = event.target;
+    const q = getWikilinkQuery(textarea);
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!dropdown) return;
+
+    if (q === null) { dropdown.style.display = 'none'; _wlMatches = []; return; }
+
+    _wlMatches = notes
+        .filter(n => n.title.toLowerCase().includes(q.toLowerCase()))
+        .slice(0, 8);
+
+    if (_wlMatches.length === 0) { dropdown.style.display = 'none'; return; }
+
+    _wlSelectedIdx = 0;
+    renderWikilinkDropdown();
+    dropdown.style.display = 'block';
+}
+
+function renderWikilinkDropdown() {
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!dropdown) return;
+    dropdown.innerHTML = _wlMatches.map((n, i) => `
+        <div class="wl-item ${i === _wlSelectedIdx ? 'selected' : ''}" onmousedown="applyWikilinkCompletion('${n.title.replace(/'/g, "\\'")}')">
+            📄 ${escapeHtml(n.title)}
+        </div>`).join('');
+}
+
+function handleWikilinkKey(event) {
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!dropdown || dropdown.style.display === 'none') return;
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        _wlSelectedIdx = Math.min(_wlSelectedIdx + 1, _wlMatches.length - 1);
+        renderWikilinkDropdown();
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        _wlSelectedIdx = Math.max(_wlSelectedIdx - 1, 0);
+        renderWikilinkDropdown();
+    } else if (event.key === 'Enter' || event.key === 'Tab') {
+        if (_wlMatches.length > 0) {
+            event.preventDefault();
+            applyWikilinkCompletion(_wlMatches[_wlSelectedIdx].title);
+        }
+    } else if (event.key === 'Escape') {
+        dropdown.style.display = 'none';
+    }
+}
+
+function applyWikilinkCompletion(title) {
+    const textarea = document.getElementById('modalContent');
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!textarea) return;
+    const val = textarea.value;
+    const pos = textarea.selectionStart;
+    const before = val.slice(0, pos);
+    const after = val.slice(pos);
+    // Replace [[query with [[Title]]
+    const replaced = before.replace(/\[\[([^\][\n]*)$/, `[[${title}]]`);
+    textarea.value = replaced + after;
+    textarea.selectionStart = textarea.selectionEnd = replaced.length;
+    dropdown.style.display = 'none';
+    _wlMatches = [];
+    updateModalPreview();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2987,6 +3225,11 @@ document.addEventListener('keydown', e => {
         e.preventDefault();
         const pane = openPanes[0];
         if (pane) toggleFindBar(pane.uid);
+    }
+    // Cmd+H → find & replace in editor
+    if ((e.metaKey || e.ctrlKey) && e.key === 'h' && document.getElementById('editorModal')) {
+        e.preventDefault();
+        toggleEditorFindReplace();
     }
     // Cmd+N → new note
     if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
@@ -3756,8 +3999,6 @@ async function createFromTemplate(templateId) {
 // ════════════════════════════════════════════════════════════
 // Search highlight helper
 // ════════════════════════════════════════════════════════════
-function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-
 function getBacklinkExcerpt(content, linkedTitle) {
     // Find [[linkedTitle]] in content and return surrounding sentence
     const re = new RegExp(`\\[\\[${escapeRegex(linkedTitle)}(?:\\|[^\\]]+)?\\]\\]`, 'i');
