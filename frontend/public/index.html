@@ -869,6 +869,22 @@
         .wp-body pre { padding: 6px 8px; font-size: 10.5px; border-radius: 4px; }
         .wp-body ul, .wp-body ol { padding-left: 14px; margin-bottom: 4px; }
 
+        /* ── Context menu ───────────────────────────────────────── */
+        .ctx-menu {
+            position: fixed; z-index: 6000;
+            background: var(--content-bg); border: 1px solid var(--border);
+            border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+            min-width: 168px; padding: 4px 0; overflow: hidden;
+        }
+        .ctx-item {
+            padding: 7px 16px; font-size: 13px; cursor: pointer;
+            color: var(--text-primary); white-space: nowrap;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .ctx-item:hover { background: var(--accent-dim); color: var(--accent); }
+        .ctx-item.danger:hover { background: rgba(229,83,75,0.1); color: var(--danger); }
+        .ctx-separator { height: 1px; background: var(--border); margin: 4px 0; }
+
         /* ── Note color labels ───────────────────────────────────── */
         .note-color-dot {
             display: inline-block; width: 8px; height: 8px;
@@ -966,6 +982,10 @@
             border-bottom: 1px solid rgba(245,166,35,0.3);
             font-size: 11.5px; color: #f5a623; text-align: center; flex-shrink: 0;
         }
+
+        /* ── Word/char count toggle ─────────────────────────────── */
+        .wc-toggle { cursor: pointer; }
+        .wc-toggle:hover { color: var(--accent); }
 
         /* ── Focus timer ─────────────────────────────────────────── */
         .focus-timer {
@@ -1742,6 +1762,111 @@ function toggleBulkSelect(noteId, el) {
 }
 
 // ════════════════════════════════════════════════════════════
+// Right-click context menu
+// ════════════════════════════════════════════════════════════
+function showNoteContextMenu(event, noteId) {
+    event.preventDefault();
+    event.stopPropagation();
+    document.getElementById('ctxMenu')?.remove();
+
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    const isStarred = starredNotes.has(noteId);
+    const isOpen = openPanes.some(p => p.note.id === noteId);
+
+    const menu = document.createElement('div');
+    menu.id = 'ctxMenu';
+    menu.className = 'ctx-menu';
+    menu.innerHTML = `
+        <div class="ctx-item" onclick="loadNote('${noteId}')">📄 Open</div>
+        ${!isOpen ? `<div class="ctx-item" onclick="loadNoteInNewPane('${noteId}')">➕ Open in new pane</div>` : ''}
+        <div class="ctx-item" onclick="ctxDuplicate('${noteId}')">⧉ Duplicate</div>
+        <div class="ctx-separator"></div>
+        <div class="ctx-item" onclick="ctxRename('${noteId}')">✏️ Rename</div>
+        <div class="ctx-item" onclick="ctxToggleStar('${noteId}')">${isStarred ? '☆ Unpin' : '⭐ Pin'}</div>
+        <div class="ctx-item" onclick="pickNoteColor(event,'${noteId}')">🎨 Color label</div>
+        <div class="ctx-separator"></div>
+        <div class="ctx-item danger" onclick="ctxDelete('${noteId}')">🗑 Delete</div>
+    `;
+
+    // Position near cursor
+    let x = event.clientX, y = event.clientY;
+    document.body.appendChild(menu);
+    const r = menu.getBoundingClientRect();
+    if (x + r.width > window.innerWidth) x = window.innerWidth - r.width - 8;
+    if (y + r.height > window.innerHeight) y = window.innerHeight - r.height - 8;
+    menu.style.left = x + 'px'; menu.style.top = y + 'px';
+
+    setTimeout(() => {
+        const close = e => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('click', close); } };
+        document.addEventListener('click', close);
+    }, 0);
+}
+
+async function loadNoteInNewPane(noteId) {
+    document.getElementById('ctxMenu')?.remove();
+    if (openPanes.length >= MAX_PANES) { showNotification('Maximum panes open', 'info'); return; }
+    let note = noteCache.get(noteId) || notes.find(n => n.id === noteId);
+    if (!note) return;
+    const uid = makePaneUid();
+    openPanes.push({ uid, note, history: [noteId], historyIdx: 0 });
+    renderPanes();
+}
+
+async function ctxDuplicate(noteId) {
+    document.getElementById('ctxMenu')?.remove();
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    try {
+        const res = await apiCall('/notes', { method: 'POST', body: JSON.stringify({ title: `${note.title} (copy)`, content: note.content }) });
+        if (!res.ok) throw new Error();
+        const dup = await res.json();
+        noteCache.set(dup.id, dup);
+        await loadNotes();
+        loadNote(dup.id);
+        showNotification('Duplicated', 'success');
+    } catch { showNotification('Failed', 'error'); }
+}
+
+async function ctxRename(noteId) {
+    document.getElementById('ctxMenu')?.remove();
+    const note = notes.find(n => n.id === noteId);
+    if (!note) return;
+    const newTitle = prompt('Rename note:', note.title);
+    if (!newTitle || newTitle === note.title) return;
+    try {
+        const res = await apiCall(`/notes/${noteId}`, { method: 'PUT', body: JSON.stringify({ title: newTitle, content: note.content }) });
+        if (!res.ok) throw new Error();
+        const updated = await res.json();
+        noteCache.set(updated.id, updated);
+        await loadNotes();
+        openPanes.filter(p => p.note.id === noteId).forEach(p => { p.note = updated; renderPaneContent(p); });
+        showNotification('Renamed', 'success');
+    } catch { showNotification('Failed', 'error'); }
+}
+
+function ctxToggleStar(noteId) {
+    document.getElementById('ctxMenu')?.remove();
+    if (starredNotes.has(noteId)) starredNotes.delete(noteId);
+    else starredNotes.add(noteId);
+    localStorage.setItem('synote_starred', JSON.stringify([...starredNotes]));
+    renderNotesList();
+}
+
+async function ctxDelete(noteId) {
+    document.getElementById('ctxMenu')?.remove();
+    const note = notes.find(n => n.id === noteId);
+    if (!confirm(`Delete "${note?.title || 'this note'}"?`)) return;
+    try {
+        await apiCall(`/notes/${noteId}`, { method: 'DELETE' });
+        noteCache.delete(noteId);
+        openPanes = openPanes.filter(p => p.note.id !== noteId);
+        await loadNotes(); renderPanes();
+        showNotification('Deleted', 'success');
+    } catch { showNotification('Failed', 'error'); }
+}
+
+// ════════════════════════════════════════════════════════════
 // Note color labels
 // ════════════════════════════════════════════════════════════
 const NOTE_COLORS = ['#e5534b','#f5a623','#2ea043','#6d5ef5','#58a6ff','#db61a2','',''];
@@ -1855,7 +1980,9 @@ function makeNoteItemHtml(note, active, extraHtml = '', showDate = true, titleHt
     const color = noteColors[note.id];
     const dot = color ? `<span class="note-color-dot" style="background:${color};" onclick="pickNoteColor(event,'${note.id}')"></span>` : '';
     const titleHtml = titleHtmlOverride || escapeHtml(note.title || 'Untitled');
-    return `<div class="note-item ${active ? 'active' : ''} ${bulkSelected.has(note.id)?'bulk-selected':''}" onclick="handleNoteItemClick(event,'${note.id}',this)">
+    return `<div class="note-item ${active ? 'active' : ''} ${bulkSelected.has(note.id)?'bulk-selected':''}"
+        onclick="handleNoteItemClick(event,'${note.id}',this)"
+        oncontextmenu="showNoteContextMenu(event,'${note.id}')">
         <div class="note-item-title">${dot}${titleHtml}</div>
         ${extraHtml}
         ${showDate ? `<div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>` : ''}
@@ -2197,7 +2324,8 @@ function populatePaneBody(pane) {
     // Word count footer + focus timer
     const footer = document.createElement('div');
     footer.className = 'pane-footer';
-    footer.innerHTML = `<span>${wc.toLocaleString()} words</span><span>·</span><span>${readMin} min read</span><span>·</span><span class="focus-timer" id="timer-${uid}">0:00</span>`;
+    const charCount = note.content.length;
+    footer.innerHTML = `<span class="wc-toggle" onclick="toggleWordCharCount(this,${wc},${charCount})" title="Click to toggle">${wc.toLocaleString()} words</span><span>·</span><span>${readMin} min read</span><span>·</span><span class="focus-timer" id="timer-${uid}">0:00</span>`;
     body.parentElement.appendChild(footer);
 
     // Start focus timer for this pane
@@ -2813,6 +2941,12 @@ function editorFRReplaceAll() {
 }
 
 function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function toggleWordCharCount(el, words, chars) {
+    const showWords = el.dataset.mode !== 'chars';
+    el.dataset.mode = showWords ? 'chars' : 'words';
+    el.textContent = showWords ? `${chars.toLocaleString()} chars` : `${words.toLocaleString()} words`;
+}
 
 // ════════════════════════════════════════════════════════════
 // Wikilink autocomplete in editor
