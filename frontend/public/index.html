@@ -269,7 +269,9 @@
         .note-item-date {
             font-size: 10.5px;
             color: var(--sidebar-muted);
+            display: flex; justify-content: space-between;
         }
+        .note-age { opacity: 0.6; }
 
         .note-item.active .note-item-date { color: rgba(168,156,255,0.55); }
 
@@ -1983,13 +1985,28 @@ function makeNoteItemHtml(note, active, extraHtml = '', showDate = true, titleHt
     const color = noteColors[note.id];
     const dot = color ? `<span class="note-color-dot" style="background:${color};" onclick="pickNoteColor(event,'${note.id}')"></span>` : '';
     const titleHtml = titleHtmlOverride || escapeHtml(note.title || 'Untitled');
+    const ageStr = showDate ? getAgeString(note.updated_at) : '';
     return `<div class="note-item ${active ? 'active' : ''} ${bulkSelected.has(note.id)?'bulk-selected':''}"
         onclick="handleNoteItemClick(event,'${note.id}',this)"
         oncontextmenu="showNoteContextMenu(event,'${note.id}')">
         <div class="note-item-title">${dot}${titleHtml}</div>
         ${extraHtml}
-        ${showDate ? `<div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>` : ''}
+        ${showDate ? `<div class="note-item-date"><span>${new Date(note.updated_at).toLocaleDateString()}</span><span class="note-age">${ageStr}</span></div>` : ''}
     </div>`;
+}
+
+function getAgeString(dateStr) {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 2) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return `${days}d ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months}mo ago`;
+    return `${Math.floor(months / 12)}y ago`;
 }
 
 function renderNotesList() {
@@ -2250,6 +2267,7 @@ function buildPaneShell(pane) {
                 <button class="btn-icon" onclick="duplicateNote('${uid}')" title="Duplicate note">⧉</button>
                 <button class="btn-icon" onclick="editReminder('${uid}')" title="Set reminder">⏰</button>
                 <button class="btn-icon lock-btn" onclick="toggleLockNote('${note.id}')" title="${isLocked ? 'Unlock note' : 'Lock note'}">${isLocked ? '🔒' : '🔓'}</button>
+                <button class="btn-icon" onclick="showNoteStats('${uid}')" title="Note stats">📊</button>
                 <button class="btn-icon" onclick="toggleFindBar('${uid}')" title="Find in note (⌘F)">🔍</button>
                 <button class="btn btn-primary" style="font-size:11.5px;padding:3px 9px;${isLocked ? 'opacity:0.4;pointer-events:none;' : ''}" onclick="openEditorModal('${uid}')">Edit</button>
                 <div style="position:relative;" id="delete-wrap-${uid}">
@@ -2764,6 +2782,7 @@ function openEditorModal(paneUid) {
                     <input class="modal-title-input" id="modalTitle" value="${escapeHtml(note.title)}" placeholder="Title">
                     <div class="modal-actions">
                         <span class="autosave-status" id="autosaveStatus"></span>
+                        <button class="btn" id="typewriterBtn" onclick="toggleTypewriterMode()" title="Typewriter mode">⌨ Focus</button>
                         <button class="btn" onclick="toggleEditorFindReplace()" title="Find & replace (⌘H)">⇄ Replace</button>
                         <button class="btn" onclick="toggleHistoryPanel()" title="Version history">🕐 History</button>
                         <button class="btn btn-primary" onclick="saveFromModal()">Save</button>
@@ -2894,6 +2913,39 @@ function insertAtCursor(textarea, text) {
 // ════════════════════════════════════════════════════════════
 // Editor find & replace
 // ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// Typewriter mode
+// ════════════════════════════════════════════════════════════
+let typewriterMode = false;
+let typewriterHandler = null;
+
+function toggleTypewriterMode() {
+    typewriterMode = !typewriterMode;
+    const btn = document.getElementById('typewriterBtn');
+    if (btn) {
+        btn.style.background = typewriterMode ? 'var(--accent)' : '';
+        btn.style.color = typewriterMode ? 'white' : '';
+    }
+    const textarea = document.getElementById('modalContent');
+    if (!textarea) return;
+    if (typewriterMode) {
+        typewriterHandler = () => {
+            const lineH = parseInt(getComputedStyle(textarea).lineHeight) || 20;
+            const lines = textarea.value.slice(0, textarea.selectionStart).split('\n').length;
+            const targetScroll = lines * lineH - textarea.clientHeight / 2;
+            textarea.scrollTop = Math.max(0, targetScroll);
+        };
+        textarea.addEventListener('keyup', typewriterHandler);
+        textarea.addEventListener('click', typewriterHandler);
+    } else {
+        if (typewriterHandler) {
+            textarea.removeEventListener('keyup', typewriterHandler);
+            textarea.removeEventListener('click', typewriterHandler);
+            typewriterHandler = null;
+        }
+    }
+}
+
 function toggleEditorFindReplace() {
     const bar = document.getElementById('editorFindReplace');
     if (!bar) return;
@@ -4363,6 +4415,62 @@ async function showStatsModal() {
             </div>` : ''}
             <div style="text-align:center;margin-top:14px;">
                 <button class="btn" onclick="document.getElementById('statsOverlay').remove()">Close</button>
+            </div>
+        </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+}
+
+function showNoteStats(paneUid) {
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+    const { note } = pane;
+
+    // Word frequency
+    const words = note.content.toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+        .filter(w => w.length > 3);
+    const freq = {};
+    words.forEach(w => { freq[w] = (freq[w] || 0) + 1; });
+    const topWords = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0, 10);
+
+    // Links count
+    const wikilinks = (note.content.match(/\[\[([^\]]+)\]\]/g) || []).length;
+    const tags = (note.content.match(/#[a-zA-Z0-9_-]+/g) || []).length;
+    const headings = (note.content.match(/^#{1,6}\s/gm) || []).length;
+    const wc = getWordCount(note.content);
+    const readMin = Math.max(1, Math.round(wc / 200));
+    const created = new Date(note.created_at).toLocaleDateString();
+    const updated = new Date(note.updated_at).toLocaleString();
+
+    if (document.getElementById('noteStatsOverlay')) document.getElementById('noteStatsOverlay').remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'noteStatsOverlay';
+    overlay.className = 'shortcuts-overlay';
+    overlay.innerHTML = `
+        <div class="shortcuts-modal" style="width:400px;">
+            <h2>📊 ${escapeHtml(note.title)}</h2>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="stat-value">${wc.toLocaleString()}</div><div class="stat-label">Words</div></div>
+                <div class="stat-card"><div class="stat-value">${note.content.length.toLocaleString()}</div><div class="stat-label">Chars</div></div>
+                <div class="stat-card"><div class="stat-value">${readMin}</div><div class="stat-label">Min read</div></div>
+                <div class="stat-card"><div class="stat-value">${headings}</div><div class="stat-label">Headings</div></div>
+                <div class="stat-card"><div class="stat-value">${wikilinks}</div><div class="stat-label">Wikilinks</div></div>
+                <div class="stat-card"><div class="stat-value">${tags}</div><div class="stat-label">Tags</div></div>
+            </div>
+            <div class="stat-top" style="margin-top:12px;">
+                <div class="stat-top-title">Top words</div>
+                ${topWords.map(([w, cnt]) =>
+                    `<div class="stat-top-item"><span>${escapeHtml(w)}</span><span class="stat-top-item-val">${cnt}×</span></div>`
+                ).join('')}
+            </div>
+            <div class="stat-top">
+                <div class="stat-top-title">Dates</div>
+                <div class="stat-top-item"><span>Created</span><span>${created}</span></div>
+                <div class="stat-top-item"><span>Updated</span><span>${updated}</span></div>
+            </div>
+            <div style="text-align:center;margin-top:14px;">
+                <button class="btn" onclick="document.getElementById('noteStatsOverlay').remove()">Close</button>
             </div>
         </div>`;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
