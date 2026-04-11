@@ -983,6 +983,9 @@
             font-size: 11.5px; color: #f5a623; text-align: center; flex-shrink: 0;
         }
 
+        /* ── Pane keyboard focus ─────────────────────────────────── */
+        .note-pane.pane-focused { outline: 2px solid var(--accent); outline-offset: -2px; }
+
         /* ── Word/char count toggle ─────────────────────────────── */
         .wc-toggle { cursor: pointer; }
         .wc-toggle:hover { color: var(--accent); }
@@ -3439,6 +3442,17 @@ document.addEventListener('keydown', e => {
         e.preventDefault();
         toggleZenMode();
     }
+    // Cmd+[ / Cmd+] → switch focus between panes
+    if ((e.metaKey || e.ctrlKey) && (e.key === '[' || e.key === ']') && openPanes.length > 1 && !inInput) {
+        e.preventDefault();
+        const visiblePanes = openPanes.filter(p => !p.minimized);
+        if (visiblePanes.length < 2) return;
+        let focusedIdx = visiblePanes.findIndex(p => document.getElementById(`pane-${p.uid}`)?.classList.contains('pane-focused'));
+        if (focusedIdx === -1) focusedIdx = 0;
+        const nextIdx = e.key === ']' ? (focusedIdx + 1) % visiblePanes.length : (focusedIdx - 1 + visiblePanes.length) % visiblePanes.length;
+        document.querySelectorAll('.note-pane').forEach(el => el.classList.remove('pane-focused'));
+        document.getElementById(`pane-${visiblePanes[nextIdx].uid}`)?.classList.add('pane-focused');
+    }
     // ? → shortcuts cheatsheet (not in input)
     if (e.key === '?' && !inInput) {
         e.preventDefault();
@@ -3893,6 +3907,7 @@ function showShortcutsModal() {
             <div class="shortcuts-group">
                 <div class="shortcuts-group-title">Navigation</div>
                 ${row('Command palette','⌘','K')}
+                ${row('Switch pane left/right','⌘','[','/',' ]')}
                 ${row('Show shortcuts','?')}
                 ${row('Close overlay / exit zen','Esc')}
             </div>
@@ -3901,12 +3916,18 @@ function showShortcutsModal() {
                 ${row('New note','⌘','N')}
                 ${row('Save note','⌘','S')}
                 ${row('Find in note','⌘','F')}
+                ${row('Find & replace (editor)','⌘','H')}
                 ${row('Rename pane title','dbl-click title')}
             </div>
             <div class="shortcuts-group">
                 <div class="shortcuts-group-title">View</div>
                 ${row('Toggle dark mode','⌘','D')}
                 ${row('Zen / focus mode','⌘','.')}
+            </div>
+            <div class="shortcuts-group">
+                <div class="shortcuts-group-title">Sidebar</div>
+                ${row('Shift+click notes to multi-select','Shift+click')}
+                ${row('Right-click note for actions','Right-click')}
             </div>
             <div style="text-align:center;margin-top:12px;">
                 <button class="btn" onclick="document.getElementById('shortcutsOverlay').remove()">Close</button>
@@ -4133,6 +4154,38 @@ const NOTE_TEMPLATES = [
         desc: 'Goals, tasks, notes',
         title: 'New Project',
         content: `## Overview\n\n\n\n## Goals\n\n- \n\n## Tasks\n\n- [ ] \n- [ ] \n\n## Notes\n\n`
+    },
+    {
+        id: 'zettelkasten',
+        icon: '🗂',
+        name: 'Zettelkasten',
+        desc: 'Atomic idea note',
+        title: () => `Z — ${new Date().toISOString().slice(0,10)}`,
+        content: `## Idea\n\n\n\n## Context\n\n\n\n## Connections\n\n- [[  ]]\n\n## Source\n\n`
+    },
+    {
+        id: 'weekly',
+        icon: '📆',
+        name: 'Weekly Review',
+        desc: 'Reflect & plan the week',
+        title: () => `Weekly Review — ${new Date().toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}`,
+        content: `## What went well\n\n- \n\n## What could improve\n\n- \n\n## This week's focus\n\n- [ ] \n- [ ] \n- [ ] \n\n## Gratitude\n\n`
+    },
+    {
+        id: 'howto',
+        icon: '📖',
+        name: 'How-To Guide',
+        desc: 'Step-by-step instructions',
+        title: 'How to …',
+        content: `## Overview\n\n\n\n## Prerequisites\n\n- \n\n## Steps\n\n1. \n2. \n3. \n\n## Troubleshooting\n\n\n\n## See also\n\n- [[  ]]\n`
+    },
+    {
+        id: 'book',
+        icon: '📚',
+        name: 'Book Notes',
+        desc: 'Reading notes & highlights',
+        title: 'Book: ',
+        content: `**Author:**\n**Finished:**\n**Rating:** ⭐⭐⭐⭐⭐\n\n## Key ideas\n\n- \n\n## Quotes\n\n> \n\n## What I'll apply\n\n- \n\n## Links\n\n- [[  ]]\n`
     }
 ];
 
