@@ -871,6 +871,21 @@
         .wp-body pre { padding: 6px 8px; font-size: 10.5px; border-radius: 4px; }
         .wp-body ul, .wp-body ol { padding-left: 14px; margin-bottom: 4px; }
 
+        /* ── Emoji picker ───────────────────────────────────────── */
+        .emoji-picker {
+            position: fixed; z-index: 6000;
+            background: var(--content-bg); border: 1px solid var(--border);
+            border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+            padding: 8px; display: grid; grid-template-columns: repeat(10, 1fr);
+            gap: 2px; max-width: 300px;
+        }
+        .emoji-btn {
+            width: 26px; height: 26px; font-size: 15px;
+            border: none; background: transparent; cursor: pointer;
+            border-radius: 4px; display: flex; align-items: center; justify-content: center;
+        }
+        .emoji-btn:hover { background: var(--accent-dim); }
+
         /* ── Context menu ───────────────────────────────────────── */
         .ctx-menu {
             position: fixed; z-index: 6000;
@@ -2805,6 +2820,7 @@ function openEditorModal(paneUid) {
                     <input class="modal-title-input" id="modalTitle" value="${escapeHtml(note.title)}" placeholder="Title">
                     <div class="modal-actions">
                         <span class="autosave-status" id="autosaveStatus"></span>
+                        <button class="btn" onclick="toggleEmojiPicker()" title="Insert emoji">😀</button>
                         <button class="btn" id="typewriterBtn" onclick="toggleTypewriterMode()" title="Typewriter mode">⌨ Focus</button>
                         <button class="btn" onclick="toggleEditorFindReplace()" title="Find & replace (⌘H)">⇄ Replace</button>
                         <button class="btn" onclick="toggleHistoryPanel()" title="Version history">🕐 History</button>
@@ -2936,6 +2952,44 @@ function insertAtCursor(textarea, text) {
 // ════════════════════════════════════════════════════════════
 // Editor find & replace
 // ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// Emoji picker
+// ════════════════════════════════════════════════════════════
+const EMOJI_LIST = [
+    '😀','😂','🥰','😎','🤔','😅','👍','👎','❤️','🔥',
+    '✅','⚠️','💡','📝','📌','🚀','🎯','💬','🔗','🔒',
+    '⭐','📅','🏷','🗂','📊','📈','📉','💻','🛠','🎨',
+    '🌍','🔍','📚','💡','🔔','📌','✨','🎉','👀','🤝',
+];
+
+function toggleEmojiPicker() {
+    document.getElementById('emojiPicker')?.remove();
+    const btn = document.querySelector('.modal-actions .btn[onclick="toggleEmojiPicker()"]');
+    if (!btn) return;
+    const picker = document.createElement('div');
+    picker.id = 'emojiPicker';
+    picker.className = 'emoji-picker';
+    picker.innerHTML = EMOJI_LIST.map(e =>
+        `<button class="emoji-btn" onmousedown="insertEmoji('${e}')">${e}</button>`
+    ).join('');
+    const rect = btn.getBoundingClientRect();
+    picker.style.top = (rect.bottom + 4) + 'px';
+    picker.style.right = (window.innerWidth - rect.right) + 'px';
+    document.body.appendChild(picker);
+    setTimeout(() => {
+        const close = e => { if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', close); } };
+        document.addEventListener('click', close);
+    }, 0);
+}
+
+function insertEmoji(emoji) {
+    const textarea = document.getElementById('modalContent');
+    if (!textarea) return;
+    insertAtCursor(textarea, emoji);
+    updateModalPreview();
+    document.getElementById('emojiPicker')?.remove();
+}
+
 // ════════════════════════════════════════════════════════════
 // Typewriter mode
 // ════════════════════════════════════════════════════════════
@@ -3478,7 +3532,13 @@ async function showGraphView() {
         <div class="graph-container">
             <div class="graph-header">
                 <h2>⬡ Note Graph</h2>
-                <button class="btn" onclick="closeGraphView()">← Back</button>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <input id="graphSearch" placeholder="Search notes…" oninput="filterGraph(this.value)"
+                        style="padding:4px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--sidebar-bg);color:var(--text-primary);font-size:12px;width:180px;">
+                    <span id="graphNodeCount" style="font-size:11px;color:var(--text-muted);"></span>
+                    <button class="btn" onclick="resetGraphZoom()">Reset</button>
+                    <button class="btn" onclick="closeGraphView()">← Back</button>
+                </div>
             </div>
             <svg class="graph-canvas" id="graphCanvas"></svg>
         </div>`;
@@ -3507,7 +3567,10 @@ function renderForceGraph(data) {
     svg.attr('viewBox', `0 0 ${width} ${height}`).attr('width', width).attr('height', height);
     svg.selectAll('*').remove();
     const g = svg.append('g');
-    svg.call(d3.zoom().scaleExtent([0.1,4]).on('zoom', e => g.attr('transform', e.transform)));
+    graphZoom = d3.zoom().scaleExtent([0.1,4]).on('zoom', e => g.attr('transform', e.transform));
+    svg.call(graphZoom);
+    const nodeCount = document.getElementById('graphNodeCount');
+    if (nodeCount) nodeCount.textContent = `${data.nodes.length} notes · ${data.edges.length} links`;
     // Size nodes by connection count
     const connCount = {};
     (data.edges||[]).forEach(e => {
@@ -3528,7 +3591,8 @@ function renderForceGraph(data) {
             .on('start',(e,d)=>{ if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
             .on('drag',(e,d)=>{ d.fx=e.x; d.fy=e.y; })
             .on('end',(e,d)=>{ if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }))
-        .on('click',(e,d)=>{ e.stopPropagation(); loadNote(d.id); });
+        .on('click',(e,d)=>{ e.stopPropagation(); loadNote(d.id); })
+        .on('dblclick',(e,d)=>{ e.stopPropagation(); if(d.fx!=null){d.fx=null;d.fy=null;d3.select(e.currentTarget).select('circle').attr('stroke','rgba(255,255,255,0.2)');} else {d.fx=d.x;d.fy=d.y;d3.select(e.currentTarget).select('circle').attr('stroke','#f5a623');} graphSimulation.alphaTarget(0.1).restart(); });
     node.append('circle').attr('r',d=>d.size||8).attr('fill','#6d5ef5').attr('stroke','rgba(255,255,255,0.2)').attr('stroke-width',2);
     node.append('text').attr('dy',d=>(d.size||8)+14).attr('text-anchor','middle')
         .text(d=>d.title?.length>22?d.title.slice(0,22)+'…':d.title)
@@ -3558,6 +3622,38 @@ function renderForceGraph(data) {
         link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
         node.attr('transform',d=>`translate(${d.x},${d.y})`);
     });
+}
+
+let graphZoom = null; // d3 zoom behavior reference
+
+function filterGraph(q) {
+    const svg = d3.select('#graphCanvas');
+    const count = document.getElementById('graphNodeCount');
+    if (!q) {
+        svg.selectAll('.graph-node').style('opacity', 1).style('pointer-events', 'all');
+        svg.selectAll('.graph-link').style('opacity', 1);
+        if (count) count.textContent = '';
+        return;
+    }
+    const lower = q.toLowerCase();
+    let visible = 0;
+    svg.selectAll('.graph-node').each(function(d) {
+        const match = d.title?.toLowerCase().includes(lower);
+        d3.select(this).style('opacity', match ? 1 : 0.08).style('pointer-events', match ? 'all' : 'none');
+        if (match) visible++;
+    });
+    svg.selectAll('.graph-link').each(function(d) {
+        const srcTitle = (d.source.title || '').toLowerCase();
+        const tgtTitle = (d.target.title || '').toLowerCase();
+        const show = srcTitle.includes(lower) || tgtTitle.includes(lower);
+        d3.select(this).style('opacity', show ? 0.8 : 0.03);
+    });
+    if (count) count.textContent = `${visible} match${visible !== 1 ? 'es' : ''}`;
+}
+
+function resetGraphZoom() {
+    const svg = d3.select('#graphCanvas');
+    if (graphZoom) svg.transition().duration(400).call(graphZoom.transform, d3.zoomIdentity);
 }
 
 // ════════════════════════════════════════════════════════════
