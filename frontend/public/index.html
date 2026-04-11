@@ -1647,6 +1647,7 @@ function init() {
     initSidebarResize();
     initSwipeGesture();
     initReminders();
+    initSidebarHover();
     loadNotes().then(() => {
         // Handle permalink: #note-<uuid>
         const hash = location.hash;
@@ -1655,6 +1656,27 @@ function init() {
             const note = notes.find(n => n.id === noteId);
             if (note) loadNote(noteId);
         }
+    });
+}
+
+function initSidebarHover() {
+    const list = document.getElementById('notesList');
+    list.addEventListener('mouseover', e => {
+        const item = e.target.closest('.note-item');
+        if (!item) { hideWikilinkPreview(); return; }
+        // Extract noteId from onclick attribute
+        const m = item.getAttribute('onclick')?.match(/'([0-9a-f-]{36})'/);
+        if (!m) return;
+        const noteId = m[1];
+        const note = notes.find(n => n.id === noteId);
+        if (!note) return;
+        showWikilinkPreview(e, note.title, note.id);
+    });
+    list.addEventListener('mouseout', e => {
+        if (!e.relatedTarget?.closest('.note-item')) hideWikilinkPreview();
+    });
+    list.addEventListener('mousemove', e => {
+        if (e.target.closest('.note-item')) moveWikilinkPreview(e);
     });
 }
 
@@ -2470,6 +2492,7 @@ function renderMarkdownInto(elementId, content, paneUid) {
     el.innerHTML = renderWikilinks(marked.parse(processed), paneUid);
     applyCallouts(el);
     applyFoldableHeadings(el);
+    applyCheckboxToggle(el, paneUid);
     // Async: fill embed placeholders
     resolveEmbedPlaceholders(el, paneUid);
 }
@@ -2803,8 +2826,8 @@ function openEditorModal(paneUid) {
                             <div class="editor-pane-header">Markdown</div>
                             <div style="position:relative;flex:1;display:flex;flex-direction:column;">
                             <textarea class="editor-body" id="modalContent"
-                                oninput="updateModalPreview();scheduleAutosave();handleWikilinkAutocomplete(event)"
-                                onkeydown="handleWikilinkKey(event)"
+                                oninput="updateModalPreview();scheduleAutosave();handleWikilinkAutocomplete(event);handleTagAutocomplete(event)"
+                                onkeydown="handleWikilinkKey(event);handleTagKey(event)"
                                 onpaste="handleSmartPaste(event)"
                                 ondragover="event.preventDefault()"
                                 ondrop="handleImageDrop(event)">${escapeHtml(note.content)}</textarea>
@@ -3080,6 +3103,92 @@ function applyWikilinkCompletion(title) {
     textarea.selectionStart = textarea.selectionEnd = replaced.length;
     dropdown.style.display = 'none';
     _wlMatches = [];
+    updateModalPreview();
+}
+
+// ════════════════════════════════════════════════════════════
+// Tag autocomplete in editor (#tag)
+// ════════════════════════════════════════════════════════════
+let _tagSelectedIdx = 0;
+let _tagMatches = [];
+let _knownTags = []; // populated from /tags API
+
+async function ensureKnownTags() {
+    if (_knownTags.length) return;
+    try {
+        const res = await apiCall('/tags');
+        if (res.ok) _knownTags = (await res.json()).map(t => t.name);
+    } catch { /* ignore */ }
+}
+
+function getTagQuery(textarea) {
+    const val = textarea.value;
+    const pos = textarea.selectionStart;
+    const before = val.slice(0, pos);
+    const m = before.match(/#([a-zA-Z0-9_-]*)$/);
+    return m ? m[1] : null;
+}
+
+async function handleTagAutocomplete(event) {
+    await ensureKnownTags();
+    const textarea = event.target;
+    const q = getTagQuery(textarea);
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!dropdown) return;
+
+    // Only show if we don't already have wikilink matches
+    if (_wlMatches.length > 0) return;
+    if (q === null) { if (!_wlMatches.length) dropdown.style.display = 'none'; _tagMatches = []; return; }
+
+    _tagMatches = _knownTags.filter(t => t.startsWith(q.toLowerCase())).slice(0, 8);
+    if (_tagMatches.length === 0) { dropdown.style.display = 'none'; return; }
+
+    _tagSelectedIdx = 0;
+    renderTagDropdown();
+    dropdown.style.display = 'block';
+}
+
+function renderTagDropdown() {
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!dropdown) return;
+    dropdown.innerHTML = _tagMatches.map((t, i) => `
+        <div class="wl-item ${i === _tagSelectedIdx ? 'selected' : ''}" onmousedown="applyTagCompletion('${t}')">
+            🏷 #${escapeHtml(t)}
+        </div>`).join('');
+}
+
+function handleTagKey(event) {
+    if (!_tagMatches.length) return;
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!dropdown || dropdown.style.display === 'none') return;
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        _tagSelectedIdx = Math.min(_tagSelectedIdx + 1, _tagMatches.length - 1);
+        renderTagDropdown();
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        _tagSelectedIdx = Math.max(_tagSelectedIdx - 1, 0);
+        renderTagDropdown();
+    } else if (event.key === 'Enter' || event.key === 'Tab') {
+        if (_tagMatches.length > 0) { event.preventDefault(); applyTagCompletion(_tagMatches[_tagSelectedIdx]); }
+    } else if (event.key === 'Escape') {
+        dropdown.style.display = 'none'; _tagMatches = [];
+    }
+}
+
+function applyTagCompletion(tag) {
+    const textarea = document.getElementById('modalContent');
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!textarea) return;
+    const val = textarea.value;
+    const pos = textarea.selectionStart;
+    const before = val.slice(0, pos);
+    const after = val.slice(pos);
+    const replaced = before.replace(/#([a-zA-Z0-9_-]*)$/, `#${tag}`);
+    textarea.value = replaced + after;
+    textarea.selectionStart = textarea.selectionEnd = replaced.length;
+    dropdown.style.display = 'none';
+    _tagMatches = [];
     updateModalPreview();
 }
 
@@ -4167,6 +4276,49 @@ function applyFoldableHeadings(el) {
         h.addEventListener('click', () => {
             const folded = wrapper.classList.toggle('folded');
             h.classList.toggle('heading-folded', folded);
+        });
+    });
+}
+
+// ════════════════════════════════════════════════════════════
+// Interactive checkboxes in preview
+// ════════════════════════════════════════════════════════════
+function applyCheckboxToggle(container, paneUid) {
+    if (!paneUid) return; // don't wire in modal preview or hover previews
+    const pane = openPanes.find(p => p.uid === paneUid);
+    if (!pane) return;
+
+    container.querySelectorAll('input[type="checkbox"]').forEach((cb, idx) => {
+        cb.removeAttribute('disabled');
+        cb.style.cursor = 'pointer';
+        cb.addEventListener('change', async () => {
+            // Toggle the Nth `- [ ]` or `- [x]` in note content
+            let count = 0;
+            const newContent = pane.note.content.replace(/^(\s*[-*+]\s+)\[([ x])\]/gm, (m, prefix, state) => {
+                if (count++ === idx) {
+                    return `${prefix}[${state === ' ' ? 'x' : ' '}]`;
+                }
+                return m;
+            });
+            if (newContent === pane.note.content) return;
+            try {
+                const res = await apiCall(`/notes/${pane.note.id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ title: pane.note.title, content: newContent })
+                });
+                if (!res.ok) throw new Error();
+                const saved = await res.json();
+                noteCache.set(saved.id, saved);
+                pane.note = saved; currentNote = saved;
+                // Re-render without full rebuild to avoid scroll jump
+                const el = document.getElementById(`preview-${paneUid}`);
+                if (el) {
+                    configureMarked(paneUid);
+                    const processed = processNoteEmbeds(saved.content, paneUid);
+                    el.innerHTML = renderWikilinks(marked.parse(processed), paneUid);
+                    applyCallouts(el); applyFoldableHeadings(el); applyCheckboxToggle(el, paneUid);
+                }
+            } catch { showNotification('Failed to save', 'error'); }
         });
     });
 }
