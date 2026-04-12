@@ -871,6 +871,27 @@
         .wp-body pre { padding: 6px 8px; font-size: 10.5px; border-radius: 4px; }
         .wp-body ul, .wp-body ol { padding-left: 14px; margin-bottom: 4px; }
 
+        /* ── Quick capture FAB ───────────────────────────────────── */
+        .quick-capture-fab {
+            position: fixed; bottom: 24px; right: 24px; z-index: 4000;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: var(--accent); color: white; border: none;
+            font-size: 22px; cursor: pointer; box-shadow: var(--shadow-lg);
+            transition: transform 0.15s, box-shadow 0.15s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .quick-capture-fab:hover { transform: scale(1.12); box-shadow: 0 6px 24px rgba(109,94,245,0.5); }
+        .quick-capture-modal {
+            position: fixed; bottom: 80px; right: 24px; z-index: 4001;
+            width: 340px; background: var(--content-bg);
+            border: 1px solid var(--border); border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg); overflow: hidden;
+        }
+        .quick-capture-header { padding: 10px 14px 4px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+        .quick-capture-title { width: 100%; padding: 6px 14px; border: none; border-bottom: 1px solid var(--border-light); background: transparent; color: var(--text-primary); font-size: 14px; font-weight: 600; font-family: var(--font); outline: none; }
+        .quick-capture-body { width: 100%; min-height: 80px; max-height: 200px; padding: 8px 14px; border: none; background: transparent; color: var(--text-primary); font-size: 13px; font-family: var(--font-mono); outline: none; resize: none; line-height: 1.6; }
+        .quick-capture-footer { padding: 8px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-light); }
+
         /* ── Emoji picker ───────────────────────────────────────── */
         .emoji-picker {
             position: fixed; z-index: 6000;
@@ -1621,6 +1642,9 @@
     <button class="btn-icon" onclick="mobileClosePane()" title="Close">✕</button>
 </div>
 
+<!-- ── Quick capture FAB ──────────────────────────────────── -->
+<button class="quick-capture-fab" onclick="showQuickCapture()" title="Quick capture (⌘⇧N)">⊕</button>
+
 <!-- ── Wikilink hover preview (singleton) ─────────────────── -->
 <div class="wikilink-preview" id="wikilinkPreview">
     <div class="wp-title" id="wpTitle"></div>
@@ -1663,14 +1687,16 @@ function init() {
     initSwipeGesture();
     initReminders();
     initSidebarHover();
-    loadNotes().then(() => {
-        // Handle permalink: #note-<uuid>
+    loadNotes().then(async () => {
+        // Handle permalink: #note-<uuid> (takes precedence over saved state)
         const hash = location.hash;
         if (hash.startsWith('#note-')) {
             const noteId = hash.slice(6);
             const note = notes.find(n => n.id === noteId);
-            if (note) loadNote(noteId);
+            if (note) { loadNote(noteId); return; }
         }
+        // Restore previously open panes
+        await restorePaneState();
     });
 }
 
@@ -2260,9 +2286,36 @@ function toggleMinimizePane(paneUid) {
     addPaneResizeHandles();
 }
 
+function savePaneState() {
+    const state = openPanes.map(p => ({ noteId: p.note.id, minimized: p.minimized || false }));
+    localStorage.setItem('synote_open_panes', JSON.stringify(state));
+}
+
+async function restorePaneState() {
+    try {
+        const saved = JSON.parse(localStorage.getItem('synote_open_panes') || '[]');
+        if (!saved.length) return;
+        for (const { noteId, minimized } of saved.slice(0, MAX_PANES)) {
+            let note = noteCache.get(noteId) || notes.find(n => n.id === noteId);
+            if (!note) {
+                try {
+                    const res = await apiCall(`/notes/${noteId}`);
+                    if (res.ok) { note = await res.json(); noteCache.set(note.id, note); }
+                } catch { continue; }
+            }
+            if (!note) continue;
+            if (openPanes.some(p => p.note.id === noteId)) continue;
+            const uid = makePaneUid();
+            openPanes.push({ uid, note, history: [noteId], historyIdx: 0, minimized });
+        }
+        if (openPanes.length > 0) renderPanes();
+    } catch { /* ignore */ }
+}
+
 function renderPanes() {
     const container = document.getElementById('panesContainer');
     if (!container) return;
+    savePaneState();
     const isMobile = window.innerWidth <= 768;
     if (openPanes.length === 0) {
         container.innerHTML = `<div class="empty-state">
@@ -2952,6 +3005,51 @@ function insertAtCursor(textarea, text) {
 // ════════════════════════════════════════════════════════════
 // Editor find & replace
 // ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// Quick capture
+// ════════════════════════════════════════════════════════════
+function showQuickCapture() {
+    document.getElementById('quickCaptureModal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'quickCaptureModal';
+    modal.className = 'quick-capture-modal';
+    modal.innerHTML = `
+        <div class="quick-capture-header">Quick capture</div>
+        <input class="quick-capture-title" id="qcTitle" placeholder="Title (optional)">
+        <textarea class="quick-capture-body" id="qcBody" placeholder="Write your note…" onkeydown="handleQCKey(event)"></textarea>
+        <div class="quick-capture-footer">
+            <button class="btn" onclick="document.getElementById('quickCaptureModal')?.remove()">Discard</button>
+            <button class="btn btn-primary" onclick="saveQuickCapture()">Save ↵</button>
+        </div>`;
+    document.body.appendChild(modal);
+    setTimeout(() => {
+        document.getElementById('qcBody')?.focus();
+        const close = e => { if (!modal.contains(e.target) && !e.target.classList.contains('quick-capture-fab')) { modal.remove(); document.removeEventListener('click', close); } };
+        document.addEventListener('click', close);
+    }, 10);
+}
+
+function handleQCKey(e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); saveQuickCapture(); }
+    if (e.key === 'Escape') { document.getElementById('quickCaptureModal')?.remove(); }
+}
+
+async function saveQuickCapture() {
+    const title = document.getElementById('qcTitle')?.value.trim() || `Quick note — ${new Date().toLocaleString()}`;
+    const content = document.getElementById('qcBody')?.value.trim() || '';
+    document.getElementById('quickCaptureModal')?.remove();
+    if (!content && !title) return;
+    try {
+        const res = await apiCall('/notes', { method: 'POST', body: JSON.stringify({ title, content }) });
+        if (!res.ok) throw new Error();
+        const note = await res.json();
+        noteCache.set(note.id, note);
+        await loadNotes();
+        showNotification('Captured!', 'success');
+        loadNote(note.id);
+    } catch { showNotification('Failed to save', 'error'); }
+}
+
 // ════════════════════════════════════════════════════════════
 // Emoji picker
 // ════════════════════════════════════════════════════════════
@@ -3685,9 +3783,14 @@ document.addEventListener('keydown', e => {
         toggleEditorFindReplace();
     }
     // Cmd+N → new note
-    if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'n' && !e.shiftKey) {
         e.preventDefault();
         showNewNoteForm();
+    }
+    // Cmd+Shift+N → quick capture
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'N') {
+        e.preventDefault();
+        showQuickCapture();
     }
     // Cmd+D → toggle dark mode
     if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
