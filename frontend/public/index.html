@@ -305,6 +305,7 @@
             display: flex;
             flex: 1;
             overflow: hidden;
+            position: relative;
         }
 
         .note-pane {
@@ -1479,6 +1480,42 @@
         /* ── Search highlight ────────────────────────────────────── */
         mark.sh { background: rgba(109,94,245,0.22); color: var(--accent); border-radius: 2px; font-weight: 500; font-style: normal; }
 
+        /* ── Pane maximize ──────────────────────────────────────── */
+        .note-pane.pane-maximized {
+            position: absolute !important;
+            inset: 0 !important;
+            z-index: 60 !important;
+            max-width: none !important;
+            flex: none !important;
+            width: 100% !important;
+        }
+        .panes-wrapper.has-maximized .note-pane:not(.pane-maximized) { display: none !important; }
+
+        /* ── Word count goal ─────────────────────────────────────── */
+        .wc-goal-bar-wrap {
+            padding: 6px 14px 2px;
+            flex-shrink: 0;
+        }
+        .wc-goal-bar-track {
+            height: 3px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .wc-goal-bar-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.4s ease;
+        }
+        .wc-goal-label {
+            font-size: 10.5px;
+            color: var(--text-muted);
+            margin-top: 3px;
+            display: flex;
+            justify-content: space-between;
+        }
+
         /* ── Print ──────────────────────────────────────────────── */
         @media print {
             .sidebar, .pane-topbar, .pane-backlinks-section, .pane-toc { display: none !important; }
@@ -1656,6 +1693,10 @@
         <button class="btn btn-danger" onclick="bulkDelete()" title="Delete selected">🗑 Delete</button>
         <button class="btn" onclick="clearBulkSelect()">✕</button>
     </div>
+    <div class="wc-goal-bar-wrap" id="wcGoalBar" style="display:none;" title="Daily writing goal — click to change" onclick="setWordCountGoal()">
+        <div class="wc-goal-bar-track"><div class="wc-goal-bar-fill" id="wcGoalFill" style="width:0%"></div></div>
+        <div class="wc-goal-label"><span id="wcGoalText">0 / 500 words today</span><span id="wcGoalPct">0%</span></div>
+    </div>
 </div>
 
 <!-- ── Sidebar resize handle ──────────────────────────────── -->
@@ -1727,6 +1768,7 @@ function init() {
     initReminders();
     initSidebarHover();
     initMarkdownImport();
+    initWordCountGoal();
     loadNotes().then(async () => {
         // Handle permalink: #note-<uuid> (takes precedence over saved state)
         const hash = location.hash;
@@ -2375,6 +2417,26 @@ function toggleMinimizePane(paneUid) {
     addPaneResizeHandles();
 }
 
+let maximizedPaneUid = null;
+
+function toggleMaximizePane(paneUid) {
+    const container = document.getElementById('panesContainer');
+    if (maximizedPaneUid === paneUid) {
+        // Restore
+        maximizedPaneUid = null;
+        document.getElementById(`pane-${paneUid}`)?.classList.remove('pane-maximized');
+        container?.classList.remove('has-maximized');
+    } else {
+        // Un-maximize previous if any
+        if (maximizedPaneUid) {
+            document.getElementById(`pane-${maximizedPaneUid}`)?.classList.remove('pane-maximized');
+        }
+        maximizedPaneUid = paneUid;
+        document.getElementById(`pane-${paneUid}`)?.classList.add('pane-maximized');
+        container?.classList.add('has-maximized');
+    }
+}
+
 function savePaneState() {
     const state = openPanes.map(p => ({ noteId: p.note.id, minimized: p.minimized || false }));
     localStorage.setItem('synote_open_panes', JSON.stringify(state));
@@ -2462,6 +2524,7 @@ function buildPaneShell(pane) {
                     </div>
                 </div>
                 <button class="minimize-btn" onclick="toggleMinimizePane('${uid}')" title="${minTitle}">${minIcon}</button>
+                <button class="btn-icon" onclick="toggleMaximizePane('${uid}')" title="Maximize pane (⌘M)">⤢</button>
                 <button class="btn-icon" onclick="closePane('${uid}')" title="Close pane">✕</button>
             </div>
         </div>
@@ -3102,6 +3165,7 @@ async function saveFromModal(silent = false) {
     noteCache.set(updated.id, updated);
     pane.note = updated;
     currentNote = updated;
+    recordWordCountSaved(content);
     renderPaneContent(pane);
     await loadNotes();
     if (!silent) {
@@ -3888,6 +3952,8 @@ const CMD_ACTIONS = [
     { icon: '⌨',  label: 'Shortcuts',        hint: '>keys',   run: () => { closeCommandPalette(); showShortcutsModal(); } },
     { icon: '📊', label: 'Note Stats',       hint: '>stats',  run: () => { const p=openPanes[0]; if(p) showNoteStats(p.uid); } },
     { icon: '🎨', label: 'Change Accent',    hint: '>accent', run: () => { closeCommandPalette(); document.getElementById('accentPicker')?.click(); } },
+    { icon: '🎯', label: 'Set Writing Goal', hint: '>goal',   run: () => { closeCommandPalette(); setWordCountGoal(); } },
+    { icon: '⤢',  label: 'Maximize Pane',    hint: '>max',    run: () => { closeCommandPalette(); const p=openPanes[0]; if(p) toggleMaximizePane(p.uid); } },
 ];
 
 let cmdItems = []; // unified list: {type:'note'|'action', data}
@@ -4244,6 +4310,13 @@ document.addEventListener('keydown', e => {
         document.querySelectorAll('.note-pane').forEach(el => el.classList.remove('pane-focused'));
         document.getElementById(`pane-${visiblePanes[nextIdx].uid}`)?.classList.add('pane-focused');
     }
+    // Cmd+M → maximize/restore focused pane
+    if ((e.metaKey || e.ctrlKey) && e.key === 'm' && !document.getElementById('editorModal') && openPanes.length > 0) {
+        e.preventDefault();
+        const focused = openPanes.find(p => document.getElementById(`pane-${p.uid}`)?.classList.contains('pane-focused'))
+            || openPanes[0];
+        if (focused) toggleMaximizePane(focused.uid);
+    }
     // Cmd+W → close focused pane (not in modal)
     if ((e.metaKey || e.ctrlKey) && e.key === 'w' && !document.getElementById('editorModal') && openPanes.length > 0) {
         e.preventDefault();
@@ -4270,6 +4343,7 @@ document.addEventListener('keydown', e => {
         if (document.getElementById('shortcutsOverlay')) { document.getElementById('shortcutsOverlay').remove(); return; }
         if (document.getElementById('cmdOverlay')) { closeCommandPalette(); return; }
         if (document.getElementById('editorModal')) { closeEditorModal(); return; }
+        if (maximizedPaneUid) { toggleMaximizePane(maximizedPaneUid); return; }
         if (zenMode) { toggleZenMode(); return; }
         // Close any open export menus
         document.querySelectorAll('.export-wrap.open').forEach(el => el.classList.remove('open'));
@@ -4499,8 +4573,10 @@ function scheduleAutosave() {
         if (status) { status.textContent = 'Saving…'; status.className = 'autosave-status saving'; }
         try {
             await saveFromModal(true); // silent = true
-            if (status) { status.textContent = '✓ Saved'; status.className = 'autosave-status saved'; }
-            setTimeout(() => { if (status) { status.textContent = ''; status.className = 'autosave-status'; } }, 2000);
+            const now = new Date();
+            const ts = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            if (status) { status.textContent = `✓ Saved at ${ts}`; status.className = 'autosave-status saved'; }
+            setTimeout(() => { if (status) { status.textContent = ''; status.className = 'autosave-status'; } }, 3000);
         } catch {
             if (status) { status.textContent = 'Save failed'; status.className = 'autosave-status'; }
         }
@@ -4597,6 +4673,65 @@ function stopFocusTimer(paneUid) {
 
 // Stop timers when pane closes
 const _origClosePane = closePane;
+
+// ════════════════════════════════════════════════════════════
+// Daily word count goal
+// ════════════════════════════════════════════════════════════
+const WC_GOAL_KEY  = 'synote_wc_goal';   // target words/day
+const WC_TODAY_KEY = 'synote_wc_today';  // {date, words}
+
+function getTodayKey() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function initWordCountGoal() {
+    const goal = parseInt(localStorage.getItem(WC_GOAL_KEY) || '0');
+    if (!goal) return; // hidden until user sets goal
+    renderWordCountGoalBar();
+}
+
+function renderWordCountGoalBar() {
+    const goal = parseInt(localStorage.getItem(WC_GOAL_KEY) || '0');
+    const bar = document.getElementById('wcGoalBar');
+    if (!bar) return;
+    if (!goal) { bar.style.display = 'none'; return; }
+
+    const stored = JSON.parse(localStorage.getItem(WC_TODAY_KEY) || '{}');
+    const todayKey = getTodayKey();
+    const words = stored.date === todayKey ? (stored.words || 0) : 0;
+
+    const pct = Math.min(100, Math.round((words / goal) * 100));
+    bar.style.display = '';
+    document.getElementById('wcGoalFill').style.width = pct + '%';
+    document.getElementById('wcGoalText').textContent = `${words.toLocaleString()} / ${goal.toLocaleString()} words today`;
+    document.getElementById('wcGoalPct').textContent = pct + '%';
+    // Accent changes to green when goal hit
+    document.getElementById('wcGoalFill').style.background = pct >= 100 ? 'var(--success)' : 'var(--accent)';
+}
+
+function recordWordCountSaved(noteContent) {
+    const goal = parseInt(localStorage.getItem(WC_GOAL_KEY) || '0');
+    if (!goal) return;
+    const wc = (noteContent.match(/\b\w+\b/g) || []).length;
+    const todayKey = getTodayKey();
+    const stored = JSON.parse(localStorage.getItem(WC_TODAY_KEY) || '{}');
+    const prev = stored.date === todayKey ? (stored.words || 0) : 0;
+    // Only accumulate if writing more (don't deduct on deletion)
+    const newTotal = Math.max(prev, wc);
+    localStorage.setItem(WC_TODAY_KEY, JSON.stringify({ date: todayKey, words: newTotal }));
+    renderWordCountGoalBar();
+}
+
+function setWordCountGoal() {
+    const current = localStorage.getItem(WC_GOAL_KEY) || '500';
+    const val = prompt('Daily writing goal (words). Set to 0 to hide:', current);
+    if (val === null) return;
+    const num = parseInt(val) || 0;
+    if (num < 0) return;
+    localStorage.setItem(WC_GOAL_KEY, String(num));
+    renderWordCountGoalBar();
+    if (num > 0) showNotification(`Goal set: ${num} words/day`, 'success');
+}
 
 // ════════════════════════════════════════════════════════════
 // Stars / pinned notes
@@ -4730,6 +4865,7 @@ function showShortcutsModal() {
                 <div class="shortcuts-group-title">View</div>
                 ${row('Toggle dark mode','⌘','D')}
                 ${row('Zen / focus mode','⌘','.')}
+                ${row('Maximize / restore pane','⌘','M')}
             </div>
             <div class="shortcuts-group">
                 <div class="shortcuts-group-title">Sidebar</div>
