@@ -756,11 +756,20 @@
         .editor-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
         .editor-pane-header {
-            padding: 7px 18px;
+            padding: 4px 12px;
             background: var(--content-secondary); border-bottom: 1px solid var(--border-light);
             font-size: 10.5px; font-weight: 600; text-transform: uppercase;
             color: var(--text-muted); letter-spacing: 0.6px;
+            display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
         }
+        .md-toolbar { display: flex; align-items: center; gap: 1px; }
+        .md-tb-btn {
+            width: 24px; height: 22px; border: none; background: transparent;
+            cursor: pointer; border-radius: 3px; font-size: 12px; color: var(--text-muted);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .md-tb-btn:hover { background: var(--border-light); color: var(--text-primary); }
+        .md-tb-sep { width: 1px; height: 14px; background: var(--border); margin: 0 3px; }
 
         .editor-body {
             flex: 1; border: none; padding: 18px 22px;
@@ -2908,7 +2917,21 @@ function openEditorModal(paneUid) {
                 <div class="modal-body">
                     <div class="editor-split">
                         <div class="editor-pane">
-                            <div class="editor-pane-header">Markdown</div>
+                            <div class="editor-pane-header">
+                                Markdown
+                                <div class="md-toolbar">
+                                    <button class="md-tb-btn" onmousedown="wrapSelection('**','**','bold')" title="Bold">𝐁</button>
+                                    <button class="md-tb-btn" onmousedown="wrapSelection('*','*','italic')" title="Italic">𝑰</button>
+                                    <button class="md-tb-btn" onmousedown="wrapSelection('~~','~~','strikethrough')" title="Strikethrough">S̶</button>
+                                    <button class="md-tb-btn" onmousedown="wrapSelection('\`','\`','code')" title="Inline code">⌥</button>
+                                    <span class="md-tb-sep"></span>
+                                    <button class="md-tb-btn" onmousedown="insertHeading()" title="Heading">H</button>
+                                    <button class="md-tb-btn" onmousedown="insertListItem()" title="List">≡</button>
+                                    <button class="md-tb-btn" onmousedown="insertCheckbox()" title="Checkbox">☑</button>
+                                    <button class="md-tb-btn" onmousedown="insertLink()" title="Link">🔗</button>
+                                    <button class="md-tb-btn" onmousedown="insertCodeBlock()" title="Code block">{}</button>
+                                </div>
+                            </div>
                             <div style="position:relative;flex:1;display:flex;flex-direction:column;">
                             <textarea class="editor-body" id="modalContent"
                                 oninput="updateModalPreview();scheduleAutosave();handleWikilinkAutocomplete(event);handleTagAutocomplete(event);handleMentionAutocomplete(event)"
@@ -3009,6 +3032,83 @@ function insertImageFromFile(textarea, file) {
         updateModalPreview();
     };
     reader.readAsDataURL(file);
+}
+
+// ════════════════════════════════════════════════════════════
+// Markdown toolbar helpers
+// ════════════════════════════════════════════════════════════
+function wrapSelection(before, after, placeholder) {
+    const ta = document.getElementById('modalContent');
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const sel = ta.value.slice(start, end) || placeholder;
+    const replacement = before + sel + after;
+    ta.value = ta.value.slice(0, start) + replacement + ta.value.slice(end);
+    ta.selectionStart = start + before.length;
+    ta.selectionEnd = start + before.length + sel.length;
+    ta.focus();
+    updateModalPreview();
+}
+
+function insertHeading() {
+    const ta = document.getElementById('modalContent');
+    if (!ta) return;
+    const pos = ta.selectionStart;
+    const lineStart = ta.value.lastIndexOf('\n', pos - 1) + 1;
+    const line = ta.value.slice(lineStart, ta.value.indexOf('\n', pos) === -1 ? undefined : ta.value.indexOf('\n', pos));
+    const m = line.match(/^(#{1,5})\s/);
+    const prefix = m ? (m[1].length < 5 ? m[1] + '# ' : '## ') : '## ';
+    if (m) {
+        ta.value = ta.value.slice(0, lineStart) + prefix + line.slice(m[0].length) + ta.value.slice(lineStart + line.length);
+    } else {
+        ta.value = ta.value.slice(0, lineStart) + '## ' + ta.value.slice(lineStart);
+    }
+    ta.focus(); updateModalPreview();
+}
+
+function insertListItem() {
+    const ta = document.getElementById('modalContent');
+    if (!ta) return;
+    const pos = ta.selectionStart;
+    const newline = ta.value.lastIndexOf('\n', pos - 1) === pos - 1 ? '' : '\n';
+    insertAtCursor(ta, newline + '- ');
+    updateModalPreview();
+}
+
+function insertCheckbox() {
+    const ta = document.getElementById('modalContent');
+    if (!ta) return;
+    const pos = ta.selectionStart;
+    const newline = ta.value.lastIndexOf('\n', pos - 1) === pos - 1 ? '' : '\n';
+    insertAtCursor(ta, newline + '- [ ] ');
+    updateModalPreview();
+}
+
+function insertLink() {
+    const ta = document.getElementById('modalContent');
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const sel = ta.value.slice(start, end);
+    if (sel) {
+        ta.value = ta.value.slice(0, start) + `[${sel}](url)` + ta.value.slice(end);
+        ta.selectionStart = start + sel.length + 3;
+        ta.selectionEnd = start + sel.length + 6;
+    } else {
+        insertAtCursor(ta, '[text](url)');
+    }
+    ta.focus(); updateModalPreview();
+}
+
+function insertCodeBlock() {
+    const ta = document.getElementById('modalContent');
+    if (!ta) return;
+    const start = ta.selectionStart, end = ta.selectionEnd;
+    const sel = ta.value.slice(start, end);
+    const block = `\`\`\`\n${sel || 'code here'}\n\`\`\``;
+    ta.value = ta.value.slice(0, start) + block + ta.value.slice(end);
+    ta.selectionStart = start + 4;
+    ta.selectionEnd = start + 4 + (sel || 'code here').length;
+    ta.focus(); updateModalPreview();
 }
 
 function insertAtCursor(textarea, text) {
