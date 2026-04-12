@@ -538,7 +538,7 @@
         .tag:hover { background: var(--accent); color: white; }
 
         /* ── Preview (markdown) ─────────────────────────────────── */
-        .preview-content { font-size: 14.5px; line-height: 1.75; color: var(--text-primary); }
+        .preview-content { font-size: var(--preview-font-size, 14.5px); line-height: 1.75; color: var(--text-primary); }
 
         .preview-content h1 {
             font-size: 1.75em; font-weight: 700; margin: 0.5em 0 0.4em;
@@ -1609,6 +1609,7 @@
                 <button class="icon-btn" onclick="showShortcutsModal()" title="Keyboard shortcuts (?)">⌨</button>
                 <button class="icon-btn" id="zenToggle" onclick="toggleZenMode()" title="Zen mode (⌘.)">◎</button>
                 <button class="icon-btn" id="darkToggle" onclick="toggleDarkMode()" title="Toggle dark mode (⌘D)">🌙</button>
+                <button class="icon-btn" onclick="cycleFontSize()" id="fontSizeBtn" title="Font size">Aa</button>
             </div>
         </div>
         <div class="sidebar-toolbar">
@@ -1692,6 +1693,7 @@ let searchTimeout = null;
 let isSearching  = false;
 let sortOrder    = localStorage.getItem('synote_sort') || 'updated';
 let darkMode     = localStorage.getItem('synote_dark') === 'true';
+let fontSizeStep = parseInt(localStorage.getItem('synote_fontsize') || '0'); // -1, 0, 1
 let recentlyViewed = JSON.parse(localStorage.getItem('synote_recent') || '[]'); // [{id,title}]
 let starredNotes = new Set(JSON.parse(localStorage.getItem('synote_starred') || '[]'));
 let lockedNotes  = new Set(JSON.parse(localStorage.getItem('synote_locked') || '[]'));
@@ -1708,6 +1710,7 @@ function init() {
     applyDarkMode();
     initAccentColor();
     document.getElementById('sortSelect').value = sortOrder;
+    applyFontSize();
     initSidebarResize();
     initSwipeGesture();
     initReminders();
@@ -1763,6 +1766,21 @@ function initSwipeGesture() {
 // ════════════════════════════════════════════════════════════
 // Dark Mode
 // ════════════════════════════════════════════════════════════
+function applyFontSize() {
+    const sizes = ['13px', '15px', '17px'];
+    const labels = ['Aa', 'Aa', 'Aa'];
+    document.documentElement.style.setProperty('--preview-font-size', sizes[fontSizeStep + 1] || '15px');
+    const btn = document.getElementById('fontSizeBtn');
+    if (btn) btn.style.fontSize = fontSizeStep === 1 ? '14px' : fontSizeStep === -1 ? '10px' : '12px';
+}
+
+function cycleFontSize() {
+    fontSizeStep = fontSizeStep >= 1 ? -1 : fontSizeStep + 1;
+    localStorage.setItem('synote_fontsize', fontSizeStep);
+    applyFontSize();
+    showNotification(['Small', 'Default', 'Large'][fontSizeStep + 1] + ' font', 'info');
+}
+
 function applyDarkMode() {
     document.documentElement.classList.toggle('dark', darkMode);
     document.getElementById('darkToggle').textContent = darkMode ? '☀️' : '🌙';
@@ -2934,8 +2952,8 @@ function openEditorModal(paneUid) {
                             </div>
                             <div style="position:relative;flex:1;display:flex;flex-direction:column;">
                             <textarea class="editor-body" id="modalContent"
-                                oninput="updateModalPreview();scheduleAutosave();handleWikilinkAutocomplete(event);handleTagAutocomplete(event);handleMentionAutocomplete(event)"
-                                onkeydown="handleWikilinkKey(event);handleTagKey(event);handleMentionKey(event)"
+                                oninput="updateModalPreview();scheduleAutosave();handleWikilinkAutocomplete(event);handleTagAutocomplete(event);handleMentionAutocomplete(event);handleSlashCommand(event)"
+                                onkeydown="handleWikilinkKey(event);handleTagKey(event);handleMentionKey(event);handleSlashKey(event)"
                                 onpaste="handleSmartPaste(event)"
                                 ondragover="event.preventDefault()"
                                 ondrop="handleImageDrop(event)">${escapeHtml(note.content)}</textarea>
@@ -3402,6 +3420,90 @@ function applyWikilinkCompletion(title) {
     dropdown.style.display = 'none';
     _wlMatches = [];
     updateModalPreview();
+}
+
+// ════════════════════════════════════════════════════════════
+// Slash commands in editor
+// ════════════════════════════════════════════════════════════
+const SLASH_COMMANDS = [
+    { icon: 'H1', label: 'Heading 1',     insert: '# ',          desc: 'Large heading' },
+    { icon: 'H2', label: 'Heading 2',     insert: '## ',         desc: 'Medium heading' },
+    { icon: 'H3', label: 'Heading 3',     insert: '### ',        desc: 'Small heading' },
+    { icon: '—',  label: 'Divider',       insert: '\n---\n',     desc: 'Horizontal rule' },
+    { icon: '☑',  label: 'Task list',     insert: '- [ ] ',      desc: 'Task checkbox' },
+    { icon: '•',  label: 'Bullet list',   insert: '- ',          desc: 'Unordered list' },
+    { icon: '1.',  label: 'Numbered list',insert: '1. ',         desc: 'Ordered list' },
+    { icon: '❝',  label: 'Quote',         insert: '> ',          desc: 'Blockquote' },
+    { icon: '{}',  label: 'Code block',   insert: '```\n\n```',  desc: 'Fenced code' },
+    { icon: '|',   label: 'Table',        insert: '| Col 1 | Col 2 |\n|--------|--------|\n| Cell   | Cell   |\n', desc: 'Markdown table' },
+    { icon: '⚠',  label: 'Warning',       insert: '> [!WARNING]\n> ',  desc: 'Warning callout' },
+    { icon: '💡',  label: 'Note callout', insert: '> [!NOTE]\n> ',     desc: 'Info callout' },
+    { icon: '✅',  label: 'Tip callout',  insert: '> [!TIP]\n> ',      desc: 'Tip callout' },
+    { icon: '📅',  label: 'Date',         insert: () => new Date().toISOString().slice(0,10), desc: 'Today\'s date' },
+    { icon: '🔗',  label: 'Link',         insert: '[text](url)', desc: 'Hyperlink' },
+    { icon: '[[', label: 'Wikilink',      insert: '[[',          desc: 'Internal link' },
+];
+
+let _slashMatches = [];
+let _slashIdx = 0;
+
+function getSlashQuery(textarea) {
+    const val = textarea.value;
+    const pos = textarea.selectionStart;
+    const before = val.slice(0, pos);
+    const lineStart = before.lastIndexOf('\n') + 1;
+    const line = before.slice(lineStart);
+    const m = line.match(/^\/([a-zA-Z0-9 ]*)$/);
+    return m ? m[1] : null;
+}
+
+function handleSlashCommand(event) {
+    const textarea = event.target;
+    if (_wlMatches.length || _tagMatches.length || _mentionMatches.length) return;
+    const q = getSlashQuery(textarea);
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!dropdown) return;
+    if (q === null) { _slashMatches = []; if (!_wlMatches.length && !_tagMatches.length) dropdown.style.display = 'none'; return; }
+
+    _slashMatches = SLASH_COMMANDS.filter(c => c.label.toLowerCase().startsWith(q.toLowerCase()));
+    if (!_slashMatches.length) { dropdown.style.display = 'none'; return; }
+
+    _slashIdx = 0;
+    dropdown.innerHTML = _slashMatches.map((c, i) => `
+        <div class="wl-item ${i === _slashIdx ? 'selected' : ''}" style="display:flex;gap:8px;align-items:center;" onmousedown="applySlashCommand(${i})">
+            <span style="width:22px;text-align:center;font-size:11px;font-weight:700;opacity:0.7;">${c.icon}</span>
+            <span style="flex:1;">${c.label}</span>
+            <span style="font-size:10.5px;color:var(--text-muted);">${c.desc}</span>
+        </div>`).join('');
+    dropdown.style.display = 'block';
+}
+
+function handleSlashKey(event) {
+    if (!_slashMatches.length) return;
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!dropdown || dropdown.style.display === 'none') return;
+    if (event.key === 'ArrowDown') { event.preventDefault(); _slashIdx = Math.min(_slashIdx+1, _slashMatches.length-1); handleSlashCommand({ target: document.getElementById('modalContent') }); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); _slashIdx = Math.max(_slashIdx-1, 0); handleSlashCommand({ target: document.getElementById('modalContent') }); }
+    else if (event.key === 'Enter' || event.key === 'Tab') { if (_slashMatches.length) { event.preventDefault(); applySlashCommand(_slashIdx); } }
+    else if (event.key === 'Escape') { dropdown.style.display = 'none'; _slashMatches = []; }
+}
+
+function applySlashCommand(idx) {
+    const cmd = _slashMatches[idx];
+    if (!cmd) return;
+    const textarea = document.getElementById('modalContent');
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!textarea) return;
+    const val = textarea.value;
+    const pos = textarea.selectionStart;
+    const lineStart = val.lastIndexOf('\n', pos - 1) + 1;
+    const insert = typeof cmd.insert === 'function' ? cmd.insert() : cmd.insert;
+    textarea.value = val.slice(0, lineStart) + insert + val.slice(pos);
+    textarea.selectionStart = textarea.selectionEnd = lineStart + insert.length;
+    dropdown.style.display = 'none';
+    _slashMatches = [];
+    updateModalPreview();
+    textarea.focus();
 }
 
 // ════════════════════════════════════════════════════════════
@@ -4970,12 +5072,56 @@ async function showStatsModal() {
                         <span class="stat-top-item-val">${t.count} note${t.count!==1?'s':''}</span>
                     </div>`).join('')}
             </div>` : ''}
+            <div class="stat-top" style="margin-top:12px;">
+                <div class="stat-top-title">Creation Activity (last 52 weeks)</div>
+                <div id="activityHeatmap" style="margin-top:8px;overflow-x:auto;"></div>
+            </div>
             <div style="text-align:center;margin-top:14px;">
                 <button class="btn" onclick="document.getElementById('statsOverlay').remove()">Close</button>
             </div>
         </div>`;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
+    renderActivityHeatmap();
+}
+
+function renderActivityHeatmap() {
+    const container = document.getElementById('activityHeatmap');
+    if (!container) return;
+    // Count notes created per day for last 52 weeks
+    const now = new Date();
+    const weeks = 52;
+    const days = weeks * 7;
+    const counts = {};
+    notes.forEach(n => {
+        const d = new Date(n.created_at).toISOString().slice(0, 10);
+        counts[d] = (counts[d] || 0) + 1;
+    });
+    const maxCount = Math.max(1, ...Object.values(counts));
+
+    // Build grid: columns=weeks, rows=7 days (Mon-Sun)
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - days + 1);
+    // Align to Monday
+    const dayOfWeek = (startDate.getDay() + 6) % 7; // 0=Mon
+    startDate.setDate(startDate.getDate() - dayOfWeek);
+
+    let html = '<div style="display:flex;gap:2px;align-items:flex-start;">';
+    for (let w = 0; w < weeks; w++) {
+        html += '<div style="display:flex;flex-direction:column;gap:2px;">';
+        for (let d = 0; d < 7; d++) {
+            const date = new Date(startDate);
+            date.setDate(date.getDate() + w * 7 + d);
+            const key = date.toISOString().slice(0, 10);
+            const count = counts[key] || 0;
+            const intensity = count === 0 ? 0 : Math.max(0.15, count / maxCount);
+            const bg = count === 0 ? 'var(--border-light)' : `rgba(109,94,245,${intensity})`;
+            html += `<div title="${key}: ${count} note${count!==1?'s':''}" style="width:10px;height:10px;border-radius:2px;background:${bg};"></div>`;
+        }
+        html += '</div>';
+    }
+    html += '</div><div style="margin-top:4px;font-size:10px;color:var(--text-muted);">Less → More</div>';
+    container.innerHTML = html;
 }
 
 function showNoteStats(paneUid) {
