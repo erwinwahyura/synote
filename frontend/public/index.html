@@ -579,11 +579,21 @@
         }
 
         .preview-content pre {
-            background: #1e1e2e; padding: 16px 20px; border-radius: var(--radius-md);
+            background: #1e1e2e; padding: 0; border-radius: var(--radius-md);
             overflow-x: auto; margin-bottom: 1em; box-shadow: var(--shadow-sm);
         }
 
-        .preview-content pre code { background: none; color: #cdd6f4; padding: 0; font-size: 13px; }
+        .preview-content pre code { background: none; color: #cdd6f4; padding: 12px 16px; font-size: 13px; display: block; }
+
+        /* Code block with header */
+        .code-block-wrap { border-radius: var(--radius-md); overflow: hidden; margin-bottom: 1em; box-shadow: var(--shadow-sm); }
+        .code-block-wrap pre { margin-bottom: 0; border-radius: 0; }
+        .code-block-header { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px; background: #161626; border-bottom: 1px solid rgba(255,255,255,0.07); }
+        .code-lang { font-size: 10.5px; color: rgba(255,255,255,0.4); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.5px; }
+        .copy-code-btn { font-size: 11px; color: rgba(255,255,255,0.45); background: transparent; border: none; cursor: pointer; padding: 2px 6px; border-radius: 3px; }
+        .copy-code-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+        .code-line { display: block; }
+        .line-num { display: inline-block; width: 2.5em; text-align: right; margin-right: 16px; color: rgba(255,255,255,0.2); user-select: none; font-size: 11.5px; }
 
         .preview-content blockquote {
             border-left: 3px solid var(--accent); padding: 8px 14px;
@@ -1617,6 +1627,7 @@
             <button class="graph-btn" id="folderViewBtn" onclick="toggleFolderView()" style="flex:0 0 auto;padding:6px 8px;" title="Folder view">📁</button>
             <button class="graph-btn" onclick="showStatsModal()" style="flex:0 0 auto;padding:6px 8px;" title="Stats">📊</button>
             <button class="graph-btn" id="tagCloudBtn" onclick="toggleTagCloud()" style="flex:0 0 auto;padding:6px 8px;" title="Tag cloud">🏷</button>
+            <button class="graph-btn" onclick="openDailyNote()" style="flex:0 0 auto;padding:6px 8px;" title="Today's daily note (⌘⌥D)">📅</button>
             <select class="sort-select" id="sortSelect" onchange="setSortOrder(this.value)" title="Sort notes">
                 <option value="updated">Recent</option>
                 <option value="title">A → Z</option>
@@ -2582,16 +2593,62 @@ function configureMarked(paneUid) {
             : 'h-' + key.replace(/[^\w]+/g, '-');
         return `<h${level} id="${id}">${text}</h${level}>`;
     };
-    marked.setOptions({
-        breaks: true, gfm: true,
-        renderer,
-        highlight: (code, lang) => {
-            if (lang && hljs.getLanguage(lang)) {
-                try { return hljs.highlight(code, { language: lang }).value; } catch {}
-            }
-            return hljs.highlightAuto(code).value;
+    renderer.code = function(code, lang) {
+        let highlighted;
+        if (lang && hljs.getLanguage(lang)) {
+            try { highlighted = hljs.highlight(code, { language: lang }).value; } catch { highlighted = escapeHtml(code); }
+        } else {
+            highlighted = hljs.highlightAuto(code).value;
         }
-    });
+        const langLabel = lang ? `<span class="code-lang">${escapeHtml(lang)}</span>` : '';
+        const id = 'cb-' + Math.random().toString(36).slice(2, 8);
+        // Add line numbers
+        const lines = highlighted.split('\n');
+        const numbered = lines.map((line, i) =>
+            `<span class="code-line"><span class="line-num">${i + 1}</span>${line}</span>`
+        ).join('\n');
+        return `<div class="code-block-wrap">
+            <div class="code-block-header">
+                ${langLabel}
+                <button class="copy-code-btn" onclick="copyCode('${id}')" title="Copy">⧉ Copy</button>
+            </div>
+            <pre id="${id}"><code class="hljs ${lang ? 'language-' + lang : ''}">${numbered}</code></pre>
+        </div>`;
+    };
+
+    marked.setOptions({ breaks: true, gfm: true, renderer });
+}
+
+async function openDailyNote() {
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+    // Find existing note with today's date as title
+    let note = notes.find(n => n.title === today || n.title.startsWith(today));
+    if (note) {
+        loadNote(note.id);
+        showNotification('Daily note', 'info');
+        return;
+    }
+    // Create new daily note from template
+    const tpl = NOTE_TEMPLATES.find(t => t.id === 'daily');
+    const content = tpl ? tpl.content : '';
+    try {
+        const res = await apiCall('/notes', { method: 'POST', body: JSON.stringify({ title: today, content }) });
+        if (!res.ok) throw new Error();
+        note = await res.json();
+        noteCache.set(note.id, note);
+        await loadNotes();
+        loadNote(note.id);
+        showNotification(`Daily note for ${today}`, 'success');
+    } catch { showNotification('Failed to create daily note', 'error'); }
+}
+
+function copyCode(preId) {
+    const pre = document.getElementById(preId);
+    if (!pre) return;
+    // Extract text without line numbers
+    const lines = [...pre.querySelectorAll('.code-line')];
+    const text = lines.map(l => l.childNodes[1]?.textContent || '').join('\n');
+    navigator.clipboard.writeText(text).then(() => showNotification('Copied!', 'success'));
 }
 
 function renderMarkdownInto(elementId, content, paneUid) {
@@ -4099,6 +4156,11 @@ document.addEventListener('keydown', e => {
     if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'N') {
         e.preventDefault();
         showQuickCapture();
+    }
+    // Cmd+Alt+D → today's daily note
+    if ((e.metaKey || e.ctrlKey) && e.altKey && e.key === 'd') {
+        e.preventDefault();
+        openDailyNote();
     }
     // Cmd+D → toggle dark mode
     if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
