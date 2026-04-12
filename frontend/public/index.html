@@ -1726,6 +1726,7 @@ function init() {
     initSwipeGesture();
     initReminders();
     initSidebarHover();
+    initMarkdownImport();
     loadNotes().then(async () => {
         // Handle permalink: #note-<uuid> (takes precedence over saved state)
         const hash = location.hash;
@@ -1736,6 +1737,40 @@ function init() {
         }
         // Restore previously open panes
         await restorePaneState();
+    });
+}
+
+function initMarkdownImport() {
+    // Allow dropping .md files onto the panes area to import them
+    const panesArea = document.getElementById('panesContainer');
+    if (!panesArea) return;
+    panesArea.addEventListener('dragover', e => {
+        if ([...e.dataTransfer.items].some(i => i.kind === 'file' && (i.type === 'text/markdown' || i.type === 'text/plain'))) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        }
+    });
+    panesArea.addEventListener('drop', async e => {
+        const files = [...e.dataTransfer.files].filter(f => f.name.endsWith('.md') || f.type === 'text/markdown');
+        if (!files.length) return;
+        e.preventDefault();
+        let imported = 0;
+        for (const file of files) {
+            const text = await file.text();
+            const title = file.name.replace(/\.md$/, '');
+            try {
+                const res = await apiCall('/notes', { method: 'POST', body: JSON.stringify({ title, content: text }) });
+                if (!res.ok) throw new Error();
+                const note = await res.json();
+                noteCache.set(note.id, note);
+                imported++;
+                if (imported === 1) { await loadNotes(); loadNote(note.id); }
+            } catch { showNotification(`Failed to import ${file.name}`, 'error'); }
+        }
+        if (imported > 0) {
+            await loadNotes();
+            showNotification(`Imported ${imported} note${imported > 1 ? 's' : ''}`, 'success');
+        }
     });
 }
 
@@ -4042,6 +4077,19 @@ function renderForceGraph(data) {
     });
     data.nodes.forEach(n => { n.size = Math.min(20, 7 + (connCount[n.id]||0) * 2); });
 
+    // Color nodes by primary tag
+    const TAG_COLORS = ['#6d5ef5','#2ea043','#f5a623','#e5534b','#58a6ff','#db61a2','#f78166','#3fb950'];
+    const tagColorMap = {};
+    let tagColorIdx = 1;
+    const noteTagMap = {};
+    notes.forEach(n => {
+        const tags = (n.content.match(/#[a-zA-Z0-9_-]+/g) || []).map(t => t.slice(1));
+        if (tags.length) {
+            noteTagMap[n.id] = tags[0]; // primary tag
+            if (!tagColorMap[tags[0]]) tagColorMap[tags[0]] = TAG_COLORS[tagColorIdx++ % TAG_COLORS.length];
+        }
+    });
+
     const sim = d3.forceSimulation(data.nodes)
         .force('link', d3.forceLink(data.edges).id(d=>d.id).distance(100))
         .force('charge', d3.forceManyBody().strength(-280))
@@ -4056,7 +4104,9 @@ function renderForceGraph(data) {
             .on('end',(e,d)=>{ if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }))
         .on('click',(e,d)=>{ e.stopPropagation(); loadNote(d.id); })
         .on('dblclick',(e,d)=>{ e.stopPropagation(); if(d.fx!=null){d.fx=null;d.fy=null;d3.select(e.currentTarget).select('circle').attr('stroke','rgba(255,255,255,0.2)');} else {d.fx=d.x;d.fy=d.y;d3.select(e.currentTarget).select('circle').attr('stroke','#f5a623');} graphSimulation.alphaTarget(0.1).restart(); });
-    node.append('circle').attr('r',d=>d.size||8).attr('fill','#6d5ef5').attr('stroke','rgba(255,255,255,0.2)').attr('stroke-width',2);
+    node.append('circle').attr('r',d=>d.size||8)
+        .attr('fill', d => tagColorMap[noteTagMap[d.id]] || TAG_COLORS[0])
+        .attr('stroke','rgba(255,255,255,0.2)').attr('stroke-width',2);
     node.append('text').attr('dy',d=>(d.size||8)+14).attr('text-anchor','middle')
         .text(d=>d.title?.length>22?d.title.slice(0,22)+'…':d.title)
         .attr('font-size','11px').attr('fill','rgba(255,255,255,0.7)').attr('font-family','Inter,sans-serif');
@@ -4085,6 +4135,17 @@ function renderForceGraph(data) {
         link.attr('x1',d=>d.source.x).attr('y1',d=>d.source.y).attr('x2',d=>d.target.x).attr('y2',d=>d.target.y);
         node.attr('transform',d=>`translate(${d.x},${d.y})`);
     });
+
+    // Tag legend (top-left of SVG)
+    const legendTags = Object.entries(tagColorMap).slice(0, 8);
+    if (legendTags.length > 0) {
+        const legend = svg.append('g').attr('transform', 'translate(12, 12)');
+        legendTags.forEach(([tag, color], i) => {
+            legend.append('circle').attr('cx', 6).attr('cy', i*16+6).attr('r', 5).attr('fill', color);
+            legend.append('text').attr('x', 14).attr('y', i*16+10)
+                .text('#' + tag).attr('font-size','10px').attr('fill','rgba(255,255,255,0.55)').attr('font-family','Inter,sans-serif');
+        });
+    }
 }
 
 let graphZoom = null; // d3 zoom behavior reference
@@ -4182,6 +4243,22 @@ document.addEventListener('keydown', e => {
         const nextIdx = e.key === ']' ? (focusedIdx + 1) % visiblePanes.length : (focusedIdx - 1 + visiblePanes.length) % visiblePanes.length;
         document.querySelectorAll('.note-pane').forEach(el => el.classList.remove('pane-focused'));
         document.getElementById(`pane-${visiblePanes[nextIdx].uid}`)?.classList.add('pane-focused');
+    }
+    // Cmd+W → close focused pane (not in modal)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'w' && !document.getElementById('editorModal') && openPanes.length > 0) {
+        e.preventDefault();
+        const focused = openPanes.find(p => document.getElementById(`pane-${p.uid}`)?.classList.contains('pane-focused'));
+        const target = focused || openPanes[openPanes.length - 1];
+        if (target) closePane(target.uid);
+    }
+    // Cmd+Alt+← / → → navigate back/forward in focused pane
+    if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !inInput) {
+        e.preventDefault();
+        const focused = openPanes.find(p => document.getElementById(`pane-${p.uid}`)?.classList.contains('pane-focused'))
+            || openPanes[0];
+        if (!focused) return;
+        if (e.key === 'ArrowLeft') goBack(focused.uid);
+        else goForward(focused.uid);
     }
     // ? → shortcuts cheatsheet (not in input)
     if (e.key === '?' && !inInput) {
