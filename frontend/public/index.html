@@ -871,6 +871,20 @@
         .wp-body pre { padding: 6px 8px; font-size: 10.5px; border-radius: 4px; }
         .wp-body ul, .wp-body ol { padding-left: 14px; margin-bottom: 4px; }
 
+        /* ── Tag cloud panel ─────────────────────────────────────── */
+        .tag-cloud-panel {
+            padding: 8px 12px; border-bottom: 1px solid var(--border);
+            display: flex; flex-wrap: wrap; gap: 5px; flex-shrink: 0;
+        }
+        .tag-cloud-item {
+            padding: 2px 8px; border-radius: 10px;
+            background: var(--accent-dim); color: var(--accent);
+            font-size: 11.5px; cursor: pointer; border: 1px solid transparent;
+            transition: border-color 0.1s;
+        }
+        .tag-cloud-item:hover { border-color: var(--accent); }
+        .tag-cloud-item .tc-count { opacity: 0.6; font-size: 10px; margin-left: 3px; }
+
         /* ── Quick capture FAB ───────────────────────────────────── */
         .quick-capture-fab {
             position: fixed; bottom: 24px; right: 24px; z-index: 4000;
@@ -1592,6 +1606,7 @@
             <button class="graph-btn" onclick="showGraphView()">⬡ Graph</button>
             <button class="graph-btn" id="folderViewBtn" onclick="toggleFolderView()" style="flex:0 0 auto;padding:6px 8px;" title="Folder view">📁</button>
             <button class="graph-btn" onclick="showStatsModal()" style="flex:0 0 auto;padding:6px 8px;" title="Stats">📊</button>
+            <button class="graph-btn" id="tagCloudBtn" onclick="toggleTagCloud()" style="flex:0 0 auto;padding:6px 8px;" title="Tag cloud">🏷</button>
             <select class="sort-select" id="sortSelect" onchange="setSortOrder(this.value)" title="Sort notes">
                 <option value="updated">Recent</option>
                 <option value="title">A → Z</option>
@@ -1611,6 +1626,7 @@
         <input type="text" class="search-input" id="searchInput"
                placeholder="Search notes…" oninput="handleSearch()">
     </div>
+    <div class="tag-cloud-panel" id="tagCloudPanel" style="display:none;"></div>
     <div class="search-results-info" id="searchInfo" style="display:none;"></div>
     <div class="notes-list" id="notesList"></div>
     <div class="bulk-action-bar" id="bulkBar" style="display:none;">
@@ -2895,8 +2911,8 @@ function openEditorModal(paneUid) {
                             <div class="editor-pane-header">Markdown</div>
                             <div style="position:relative;flex:1;display:flex;flex-direction:column;">
                             <textarea class="editor-body" id="modalContent"
-                                oninput="updateModalPreview();scheduleAutosave();handleWikilinkAutocomplete(event);handleTagAutocomplete(event)"
-                                onkeydown="handleWikilinkKey(event);handleTagKey(event)"
+                                oninput="updateModalPreview();scheduleAutosave();handleWikilinkAutocomplete(event);handleTagAutocomplete(event);handleMentionAutocomplete(event)"
+                                onkeydown="handleWikilinkKey(event);handleTagKey(event);handleMentionKey(event)"
                                 onpaste="handleSmartPaste(event)"
                                 ondragover="event.preventDefault()"
                                 ondrop="handleImageDrop(event)">${escapeHtml(note.content)}</textarea>
@@ -3005,6 +3021,36 @@ function insertAtCursor(textarea, text) {
 // ════════════════════════════════════════════════════════════
 // Editor find & replace
 // ════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════
+// Tag cloud panel
+// ════════════════════════════════════════════════════════════
+async function toggleTagCloud() {
+    const panel = document.getElementById('tagCloudPanel');
+    const btn = document.getElementById('tagCloudBtn');
+    if (!panel) return;
+    if (panel.style.display !== 'none') {
+        panel.style.display = 'none';
+        btn?.classList.remove('active');
+        return;
+    }
+    btn?.classList.add('active');
+    panel.style.display = 'flex';
+    panel.innerHTML = '<span style="font-size:11px;color:var(--text-muted);padding:4px;">Loading…</span>';
+    try {
+        const res = await apiCall('/tags');
+        if (!res.ok) throw new Error();
+        const tags = await res.json();
+        if (!tags.length) { panel.innerHTML = '<span style="font-size:11px;color:var(--text-muted);">No tags yet</span>'; return; }
+        // Sort by count, compute relative sizes
+        const sorted = [...tags].sort((a,b) => (b.count||0)-(a.count||0));
+        const maxCount = sorted[0]?.count || 1;
+        panel.innerHTML = sorted.map(t => {
+            const size = Math.max(10, Math.min(14, 10 + Math.round((t.count/maxCount) * 4)));
+            return `<span class="tag-cloud-item" style="font-size:${size}px;" onclick="filterByTag('${escapeHtml(t.name)}')">#${escapeHtml(t.name)}<span class="tc-count">${t.count}</span></span>`;
+        }).join('');
+    } catch { panel.innerHTML = '<span style="font-size:11px;color:var(--danger);">Failed to load tags</span>'; }
+}
+
 // ════════════════════════════════════════════════════════════
 // Quick capture
 // ════════════════════════════════════════════════════════════
@@ -3255,6 +3301,66 @@ function applyWikilinkCompletion(title) {
     textarea.selectionStart = textarea.selectionEnd = replaced.length;
     dropdown.style.display = 'none';
     _wlMatches = [];
+    updateModalPreview();
+}
+
+// ════════════════════════════════════════════════════════════
+// @mention autocomplete in editor
+// ════════════════════════════════════════════════════════════
+let _mentionSelectedIdx = 0;
+let _mentionMatches = [];
+
+function getMentionQuery(textarea) {
+    const val = textarea.value;
+    const pos = textarea.selectionStart;
+    const before = val.slice(0, pos);
+    const m = before.match(/@([a-zA-Z0-9_.-]*)$/);
+    return m ? m[1] : null;
+}
+
+function handleMentionAutocomplete(event) {
+    const textarea = event.target;
+    const q = getMentionQuery(textarea);
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!dropdown) return;
+    if (_wlMatches.length > 0 || _tagMatches.length > 0) return;
+    if (q === null) { _mentionMatches = []; if (!_wlMatches.length && !_tagMatches.length) dropdown.style.display = 'none'; return; }
+
+    // Use note titles as mention candidates
+    _mentionMatches = notes.filter(n => n.title.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+    if (!_mentionMatches.length) { dropdown.style.display = 'none'; return; }
+
+    _mentionSelectedIdx = 0;
+    dropdown.innerHTML = _mentionMatches.map((n, i) => `
+        <div class="wl-item ${i === _mentionSelectedIdx ? 'selected' : ''}" onmousedown="applyMentionCompletion('${n.title.replace(/'/g,"\\'")}')">
+            👤 @${escapeHtml(n.title)}
+        </div>`).join('');
+    dropdown.style.display = 'block';
+}
+
+function handleMentionKey(event) {
+    if (!_mentionMatches.length) return;
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!dropdown || dropdown.style.display === 'none') return;
+    if (event.key === 'ArrowDown') { event.preventDefault(); _mentionSelectedIdx = Math.min(_mentionSelectedIdx + 1, _mentionMatches.length - 1); handleMentionAutocomplete({ target: document.getElementById('modalContent') }); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); _mentionSelectedIdx = Math.max(_mentionSelectedIdx - 1, 0); handleMentionAutocomplete({ target: document.getElementById('modalContent') }); }
+    else if (event.key === 'Enter' || event.key === 'Tab') { if (_mentionMatches.length > 0) { event.preventDefault(); applyMentionCompletion(_mentionMatches[_mentionSelectedIdx].title); } }
+    else if (event.key === 'Escape') { dropdown.style.display = 'none'; _mentionMatches = []; }
+}
+
+function applyMentionCompletion(title) {
+    const textarea = document.getElementById('modalContent');
+    const dropdown = document.getElementById('wikilinkDropdown');
+    if (!textarea) return;
+    const val = textarea.value;
+    const pos = textarea.selectionStart;
+    const before = val.slice(0, pos);
+    const after = val.slice(pos);
+    const replaced = before.replace(/@([a-zA-Z0-9_.-]*)$/, `@${title}`);
+    textarea.value = replaced + after;
+    textarea.selectionStart = textarea.selectionEnd = replaced.length;
+    dropdown.style.display = 'none';
+    _mentionMatches = [];
     updateModalPreview();
 }
 
