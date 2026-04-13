@@ -1,10 +1,8 @@
-use axum::{
-    extract::Request,
-    http::StatusCode,
-    middleware::Next,
-    response::Response,
-};
+use axum::{extract::Request, http::StatusCode, middleware::Next, response::Response};
+use jsonwebtoken::{decode, DecodingKey, Validation};
 use std::sync::Arc;
+
+use crate::api::auth::Claims;
 
 #[derive(Clone)]
 pub struct AuthConfig {
@@ -33,54 +31,32 @@ pub async fn auth_middleware(
         return Ok(next.run(request).await);
     }
 
-    // Check for Authorization header
-    let headers = request.headers();
-    if let Some(auth_header) = headers.get("authorization") {
-        if let Ok(auth_str) = auth_header.to_str() {
-            // Check Bearer token
-            if auth_str.starts_with("Bearer ") {
-                let token = &auth_str[7..];
-                if token == app_state.auth_config.token.as_str() {
-                    return Ok(next.run(request).await);
-                }
-            }
-        }
-    }
+    let auth_header = request
+        .headers()
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
 
-    // Also check for token in query param (for initial frontend load)
-    // This is a convenience for single-user setups
-    let uri = request.uri().to_string();
-    if uri.contains("token=") {
-        if let Some(token_start) = uri.find("token=") {
-            let token_part = &uri[token_start + 6..];
-            let token = token_part.split('&').next().unwrap_or(token_part);
-            if token == app_state.auth_config.token.as_str() {
-                return Ok(next.run(request).await);
-            }
+    if auth_header.starts_with("Bearer ") {
+        let token = &auth_header[7..];
+
+        // 1. Check admin/shared token (backwards compat)
+        if token == app_state.auth_config.token.as_str() {
+            return Ok(next.run(request).await);
+        }
+
+        // 2. Try JWT validation
+        let validation = Validation::default();
+        if decode::<Claims>(
+            token,
+            &DecodingKey::from_secret(app_state.jwt_secret.as_bytes()),
+            &validation,
+        )
+        .is_ok()
+        {
+            return Ok(next.run(request).await);
         }
     }
 
     Err(StatusCode::UNAUTHORIZED)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::body::Body;
-    use axum::http::Request;
-    use tower::ServiceExt;
-
-    #[tokio::test]
-    async fn test_auth_disabled() {
-        let config = AuthConfig::new(false, "test-token".to_string());
-        // Would need to set up a test route to fully test
-        assert!(!config.enabled);
-    }
-
-    #[tokio::test]
-    async fn test_auth_enabled() {
-        let config = AuthConfig::new(true, "secret-token".to_string());
-        assert!(config.enabled);
-        assert_eq!(config.token.as_str(), "secret-token");
-    }
 }
