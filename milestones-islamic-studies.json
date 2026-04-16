@@ -1,0 +1,322 @@
+{
+  "title": "Islamic Studies: Discipline Milestones",
+  "subtitle": "1,400 Years of Scholarship (610 CE – 2026 CE)",
+  "total_duration_years": 1416,
+  "eras": [
+    {
+      "id": "pre-modern",
+      "name": "Pre-Modern Islamic Scholarship",
+      "period": "7th–18th centuries",
+      "emoji": "🕌",
+      "color": "#8B4513",
+      "characteristics": "Manuscript preservation, isnad criticism, biographical dictionaries",
+      "key_innovation": "Isnad system for source verification",
+      "scholars": [
+        {
+          "name": "Ibn al-Nadim",
+          "death_year": 995,
+          "work": "Fihrist (Bibliographic catalog)",
+          "significance": "First comprehensive bibliography of Islamic texts"
+        },
+        {
+          "name": "al-Tabari",
+          "death_year": 923,
+          "work": "Tarikh al-Rusul wa al-Muluk (Universal History)",
+          "significance": "Annalistic historiography model"
+        },
+        {
+          "name": "al-Suyuti",
+          "death_year": 1505,
+          "work": "Tabaqat al-Mufassirin (Quranic scholars)",
+          "significance": "Biographical dictionary genre"
+        },
+        {
+          "name": "Ibn Khaldun",
+          "death_year": 1406,
+          "work": "Muqaddima (Prolegomena)",
+          "significance": "Historiographical theory; asabiyya concept"
+        }
+      ]
+    },
+    {
+      "id": "orientalism",
+      "name": "European Orientalism",
+      "period": "18th–19th centuries",
+      "emoji": "🗺️",
+      "color": "#2E8B57",
+      "characteristics": "European encounter, manuscript collection, translation",
+      "key_innovation": "Systematic translation and edition",
+      "turning_point": {
+        "year": 1798,
+        "event": "Napoleonic expedition to Egypt",
+        "significance": "Scientific Orientalism begins; state-sponsored scholarship"
+      },
+      "scholars": [
+        {
+          "name": "Silvestre de Sacy",
+          "years": "1758–1838",
+          "work": "Chrestomathie arabe (1806)",
+          "significance": "Father of Arabists; pedagogical foundation"
+        },
+        {
+          "name": "William Muir",
+          "years": "1819–1905",
+          "work": "Life of Mahomet (1858–1861)",
+          "significance": "British colonial administrator perspective"
+        },
+        {
+          "name": "Ernest Renan",
+          "years": "1823–1892",
+          "work": "Vie de Jésus (1863); L'Islamisme et la Science (1883)",
+          "significance": "Comparative approach; Semitic race theories"
+        }
+      ]
+    },
+    {
+      "id": "philological",
+      "name": "The Philological Era",
+      "period": "1850–1950",
+      "emoji": "🔍",
+      "color": "#DAA520",
+      "characteristics": "Scientific historical method, source criticism, positivism",
+      "key_innovation": "Critical method applied to Islamic sources",
+      "schools": [
+        {
+          "name": "German School",
+          "focus": "Textual editing, manuscript studies, quranic/hadith criticism",
+          "institutions": ["Tübingen", "Göttingen", "Berlin"]
+        },
+        {
+          "name": "French School",
+          "focus": "Sociological influence, North Africa, philosophical engagement",
+          "institutions": ["Collège de France", "INALCO"]
+        },
+        {
+          "name": "British School",
+          "focus": "Area studies, South Asia, empirical history",
+          "institutions": ["Oxford", "Cambridge", "SOAS"]
+        }
+      ],
+      "scholars": [
+        {
+          "name": "Theodor Nöldeke",
+          "years": "1836–1930",
+          "work": "Geschichte des Qorâns (1860)",
+          "significance": "First critical history of Quranic text; chronological framework still used"
+        },
+        {
+          "name": "Ignaz Goldziher",
+          "years": "1850–1921",
+          "work": "Muhammedanische Studien (1889–1890)",
+          "significance": "Critical hadith studies; hadith reflects later community not historical Muhammad"
+        },
+        {
+          "name": "Snouck Hurgronje",
+          "years": "1857–1936",
+          "work": "Mekka (1888–1889)",
+          "significance": "Ethnographic turn; Mecca residence; combined philology with fieldwork"
+        },
+        {
+          "name": "Joseph Schacht",
+          "years": "1902–1969",
+          "work": "Origins of Muhammadan Jurisprudence (1950)",
+          "significance": "Revolutionary: Islamic law originated in Iraq not Medina; hadith largely 8th–9th c."
+        },
+        {
+          "name": "Hamilton Gibb",
+          "years": "1895–1971",
+          "work": "Mohammedanism (1949)",
+          "significance": "Synthetic approach; Encyclopaedia of Islam editor; institutional leader"
+        }
+      ]
+    },
+    {
+      "id": "post-colonial",
+      "name": "The Post-Colonial Turn",
+      "period": "1950–1980",
+      "emoji": "🌍",
+      "color": "#FF8C00",
+      "characteristics": "Anthropology, civilizational approach, native scholars emerge",
+      "key_innovation": "Area studies integration; fieldwork methodology",
+      "political_context": "Decolonization (India 1947, Egypt 1952, Algeria 1962)",
+      "scholars": [
+        {
+          "name": "Marshall Hodgson",
+          "years": "1922–1968",
+          "work": "The Venture of Islam (1974)",
+          "significance": "Islamicate vs. Islamic distinction; civilizational approach; global perspective including Africa, India, SE Asia"
+        },
+        {
+          "name": "Clifford Geertz",
+          "years": "1926–2006",
+          "work": "Islam Observed (1968)",
+          "significance": "Anthropological turn; Morocco vs. Indonesia comparison; thick description"
+        },
+        {
+          "name": "Fazlur Rahman",
+          "years": "1919–1988",
+          "work": "Islam (1966); Islamic Methodology in History (1965)",
+          "significance": "Pakistani scholar; double movement theory; reformist approach"
+        },
+        {
+          "name": "Seyyed Hossein Nasr",
+          "years": "b. 1933",
+          "work": "Ideals and Realities of Islam (1966)",
+          "significance": "Traditionalist approach; perennial philosophy; Sufism as esoteric core"
+        }
+      ]
+    },
+    {
+      "id": "saidian",
+      "name": "The Saidian Revolution",
+      "period": "1978–2000",
+      "emoji": "⚡",
+      "color": "#DC143C",
+      "characteristics": "Postcolonial critique, self-reflexivity, power analysis",
+      "key_innovation": "Questioning the politics of knowledge production",
+      "turning_point": {
+        "year": 1978,
+        "event": "Edward Said's Orientalism",
+        "significance": "Disciplinary soul-searching; critique of representation as power"
+      },
+      "scholars": [
+        {
+          "name": "Edward Said",
+          "years": "1935–2003",
+          "work": "Orientalism (1978)",
+          "significance": "Orientalism as corporate institution for dealing with Orient; binary West/East construction"
+        },
+        {
+          "name": "John Wansbrough",
+          "years": "1928–2002",
+          "work": "Quranic Studies (1977); The Sectarian Milieu (1978)",
+          "significance": "Literary-critical approach; Quran as redaction; 200+ year sectarian milieu before Islamic identity"
+        },
+        {
+          "name": "Patricia Crone",
+          "years": "1945–2015",
+          "work": "Hagarism (1977, with Michael Cook); Meccan Trade; God's Rule",
+          "significance": "Radical revisionism; early Islam through non-Muslim sources; later modified but maintained skepticism"
+        },
+        {
+          "name": "Fatima Mernissi",
+          "years": "1940–2015",
+          "work": "Beyond the Veil (1975); The Veil and the Male Elite (1987)",
+          "significance": "Islamic feminism foundation; hadith on women fabricated by male elite"
+        },
+        {
+          "name": "Leila Ahmed",
+          "years": "b. 1940",
+          "work": "Women and Gender in Islam (1992)",
+          "significance": "Postcolonial feminist approach; colonial feminism vs. indigenous critique distinction"
+        }
+      ]
+    },
+    {
+      "id": "contemporary",
+      "name": "Contemporary Landscape",
+      "period": "2000–present",
+      "emoji": "💻",
+      "color": "#4169E1",
+      "characteristics": "Digital humanities, global access, plural methods, Muslim scholars prominent",
+      "key_innovation": "Democratization of sources; interdisciplinary expansion",
+      "digital_turning_points": [
+        {"year": 2000, "event": "Al-Maktaba al-Shamela (downloadable texts)"},
+        {"year": 2005, "event": "Internet Archive expansion"},
+        {"year": 2010, "event": "Manuscript digitization projects (Qatar, Yemeni)"}
+      ],
+      "scholars": [
+        {
+          "name": "Angelika Neuwirth",
+          "years": "b. 1943",
+          "work": "The Quran and Late Antiquity (2019)",
+          "significance": "Literary-historical synthesis; intertextuality with Jewish/Christian traditions; Late Antique turn"
+        },
+        {
+          "name": "Nicolai Sinai",
+          "work": "The Quran: A Historical-Critical Introduction (2023)",
+          "significance": "Comprehensive contemporary introduction; literary structure focus"
+        },
+        {
+          "name": "Shahab Ahmed",
+          "years": "1966–2015",
+          "work": "What Is Islam? (2015)",
+          "significance": "Posthumous major impact; Islam as Balkan phenomenon—diverse, contradictory, unified by revelatory engagement"
+        },
+        {
+          "name": "Saba Mahmood",
+          "years": "1962–2018",
+          "work": "Politics of Piety (2005)",
+          "significance": "Major theoretical impact; agency in inhabiting norms not just resistance; feminist rethinking"
+        },
+        {
+          "name": "Khaled Abou El Fadl",
+          "years": "b. 1963",
+          "work": "Speaking in God's Name (2001); The Great Theft (2005)",
+          "significance": "The Authority of the Authorless project; reformist legal scholar"
+        }
+      ]
+    }
+  ],
+  "key_transformation_points": [
+    {
+      "year": 1453,
+      "event": "Fall of Constantinople",
+      "impact": "Triggers European interest in Islam; Ottoman expansion"
+    },
+    {
+      "year": 1798,
+      "event": "Napoleonic expedition to Egypt",
+      "impact": "Scientific Orientalism begins; state-sponsored systematic scholarship"
+    },
+    {
+      "year": 1850,
+      "event": "German philological revolution",
+      "impact": "Critical method established; Nöldeke, Goldziher era"
+    },
+    {
+      "year": 1974,
+      "event": "Hodgson's Venture of Islam",
+      "impact": "Civilizational approach; Islamicate concept; global perspective"
+    },
+    {
+      "year": 1978,
+      "event": "Said's Orientalism",
+      "impact": "Postcolonial critique transforms field; generational divide"
+    },
+    {
+      "year": 2000,
+      "event": "Digital revolution",
+      "impact": "Democratized access; Global South scholars; new methods"
+    }
+  ],
+  "canonical_works": [
+    {"era": "Philological", "work": "Geschichte des Qorâns", "author": "Nöldeke", "year": 1860, "significance": "First critical quranic studies"},
+    {"era": "Philological", "work": "Muhammedanische Studien", "author": "Goldziher", "year": 1889, "significance": "Critical hadith studies foundation"},
+    {"era": "Philological", "work": "Origins of Muhammadan Jurisprudence", "author": "Schacht", "year": 1950, "significance": "Revolutionary legal history"},
+    {"era": "Post-Colonial", "work": "The Venture of Islam", "author": "Hodgson", "year": 1974, "significance": "Civilizational approach"},
+    {"era": "Saidian", "work": "Orientalism", "author": "Said", "year": 1978, "significance": "Postcolonial critique"},
+    {"era": "Saidian", "work": "Quranic Studies", "author": "Wansbrough", "year": 1977, "significance": "Literary-critical approach"},
+    {"era": "Saidian", "work": "Women and Gender in Islam", "author": "Ahmed", "year": 1992, "significance": "Feminist/postcolonial"},
+    {"era": "Contemporary", "work": "The Quran and Late Antiquity", "author": "Neuwirth", "year": 2019, "significance": "Literary-historical synthesis"},
+    {"era": "Contemporary", "work": "What Is Islam?", "author": "Ahmed", "year": 2015, "significance": "Redefinition of the field"}
+  ],
+  "regional_schools": [
+    {"name": "German", "strengths": ["Philological rigor", "Textual editing", "Manuscript studies"], "institutions": ["Tübingen", "Göttingen", "Frankfurt (Sezgin)"]},
+    {"name": "French", "strengths": ["Sociological influence", "North Africa focus", "Philosophical engagement"], "institutions": ["Collège de France", "INALCO", "EHESS"]},
+    {"name": "British", "strengths": ["Area studies integration", "South Asian focus", "Empirical history"], "institutions": ["Oxford", "Cambridge", "SOAS", "LSE"]},
+    {"name": "American", "strengths": ["Interdisciplinary", "Anthropology", "Critical theory"], "institutions": ["Chicago", "Harvard", "Princeton", "Columbia"]},
+    {"name": "Egyptian", "strengths": ["Manuscript resources", "Continuous tradition", "Arabic linguistic expertise"], "institutions": ["Al-Azhar", "Cairo University", "AUC"]},
+    {"name": "Iranian", "strengths": ["Philosophical tradition", "Shi'ite focus", "Manuscript treasures"], "institutions": ["Tehran University", "McGill (exile)"]},
+    {"name": "Turkish", "strengths": ["Ottoman focus", "Central Asian connections"], "institutions": ["Ankara", "Istanbul", "Bilkent"]}
+  ],
+  "metadata": {
+    "source_volume": "Islamic Studies Volume 18",
+    "source_id": "94e02b03-7091-447b-b347-d803a1702503",
+    "created_date": "2026-04-16",
+    "data_format_version": "1.0",
+    "total_scholars": 25,
+    "total_eras": 6,
+    "total_canonical_works": 9
+  }
+}
