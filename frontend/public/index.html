@@ -2236,6 +2236,7 @@ function setNoteColor(noteId, color) {
 }
 
 function handleNoteItemClick(event, noteId, el) {
+    event.stopPropagation(); // Prevent click from bubbling to folder toggle
     if (event.shiftKey || bulkSelected.size > 0 && event.metaKey) {
         event.preventDefault();
         toggleBulkSelect(noteId, el);
