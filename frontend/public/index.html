@@ -170,6 +170,66 @@ Warning: Permanently added '46.224.127.221' (ED25519) to the list of known hosts
             color: #cce5ff;
         }
 
+        /* Category/Folder Styles */
+        .category-section {
+            margin-bottom: 8px;
+        }
+
+        .category-header {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            background: #e9ecef;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+            font-weight: 600;
+            font-size: 13px;
+            color: #495057;
+        }
+
+        .category-header:hover {
+            background: #dee2e6;
+        }
+
+        .category-header.expanded {
+            background: #007bff;
+            color: white;
+        }
+
+        .category-toggle {
+            margin-right: 8px;
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+
+        .category-toggle.expanded {
+            transform: rotate(90deg);
+        }
+
+        .category-count {
+            margin-left: auto;
+            font-size: 11px;
+            background: rgba(255,255,255,0.3);
+            padding: 2px 6px;
+            border-radius: 10px;
+        }
+
+        .category-notes {
+            display: none;
+            padding-left: 8px;
+            padding-top: 4px;
+        }
+
+        .category-notes.expanded {
+            display: block;
+        }
+
+        .category-notes .note-item {
+            margin-bottom: 3px;
+            padding: 10px 12px;
+        }
+
         .editor-container {
             flex: 1;
             display: flex;
@@ -203,6 +263,7 @@ Warning: Permanently added '46.224.127.221' (ED25519) to the list of known hosts
             background: #f8f9fa;
         }
 
+        /* DELETE BUTTON STYLES - Commented out for read-only mode
         .btn-danger {
             color: #dc3545;
             border-color: #dc3545;
@@ -212,6 +273,7 @@ Warning: Permanently added '46.224.127.221' (ED25519) to the list of known hosts
             background: #dc3545;
             color: white;
         }
+        */
 
         .editor-content {
             flex: 1;
@@ -622,7 +684,7 @@ Warning: Permanently added '46.224.127.221' (ED25519) to the list of known hosts
             <h1>Synote</h1>
             <div class="sidebar-actions">
                 <!-- READ-ONLY: button class="new-note-btn" onclick="createNewNote()">+ New Note</button -->
-                <button class="graph-btn" onclick="showGraphView()">🕸️ Graph</button
+                <button class="graph-btn" onclick="showGraphView()">🕸️ Graph</button>
             </div>
         </div>
         <div class="search-box">
@@ -652,6 +714,100 @@ Warning: Permanently added '46.224.127.221' (ED25519) to the list of known hosts
         let searchTimeout = null;
         let isSearching = false;
         let authToken = localStorage.getItem('synote_token');
+        let expandedCategories = new Set(); // Track which categories are expanded
+
+        // Category definitions for auto-tagging based on title patterns
+        const CATEGORY_PATTERNS = {
+            'Medical': [/medical|health|cancer|hospital|patient|symptom|diagnosis|treatment/i, /ibu|bunga|mukaromah/i],
+            'Allah\'s Medicines': [/allah.*medicine|tibb.*nabawi|honey|madu/i],
+            'Herbal Medicine': [/herbal|jamu|temulawak|kencur|kunyit|jahe|lengkuas|temu.*kunci|kumis.*kucing|tempuyung|meniran|sambiloto|mahkota.*dewa|sirih|benalu/i],
+            'Agriculture': [/agriculture|hydroponics|cultivation|vegetable|fruit|corn|beans|squash|eggplant|okra|root.*vegetable|strawberry|tomato|cucumber|pepper|watermelon/i],
+            'Islamic Studies': [/islamic|quran|hadith|fiqh|kalam|sufi|sharia|ulama|scholar/i],
+            'Research': [/research|study|analysis|meta.*synthesis|method|keloid|immunotherapy/i],
+            'Science & Tech': [/science|technology|ai|quantum|biotech|crispr|dna|rna|microbiome/i]
+        };
+
+        // Extract tags from note content (YAML frontmatter)
+        function extractTagsFromContent(content) {
+            if (!content) return [];
+            
+            const tags = [];
+            
+            // Parse YAML frontmatter
+            const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+            if (frontmatterMatch) {
+                const yaml = frontmatterMatch[1];
+                
+                // Look for tags: field
+                const tagsMatch = yaml.match(/tags:\s*\n((?:\s+-\s*[^\n]+\n?)+)/);
+                if (tagsMatch) {
+                    const tagLines = tagsMatch[1].split('\n');
+                    for (const line of tagLines) {
+                        const tagMatch = line.match(/\s+-\s*(.+)/);
+                        if (tagMatch) {
+                            tags.push(tagMatch[1].trim());
+                        }
+                    }
+                }
+                
+                // Also check for tags: [tag1, tag2] format
+                const inlineTagsMatch = yaml.match(/tags:\s*\[([^\]]+)\]/);
+                if (inlineTagsMatch) {
+                    const inlineTags = inlineTagsMatch[1].split(',').map(t => t.trim().replace(/['"]/g, ''));
+                    tags.push(...inlineTags);
+                }
+            }
+            
+            return tags;
+        }
+
+        // Auto-categorize note based on title and content
+        function getNoteCategory(note) {
+            const title = note.title || '';
+            const content = note.content || '';
+            const tags = extractTagsFromContent(content);
+            
+            // First check explicit tags
+            for (const tag of tags) {
+                const lowerTag = tag.toLowerCase();
+                if (lowerTag.includes('medical') || lowerTag.includes('health')) return 'Medical';
+                if (lowerTag.includes('allah') || lowerTag.includes('tibb')) return 'Allah\'s Medicines';
+                if (lowerTag.includes('herbal') || lowerTag.includes('jamu')) return 'Herbal Medicine';
+                if (lowerTag.includes('agriculture') || lowerTag.includes('farm')) return 'Agriculture';
+                if (lowerTag.includes('islamic') || lowerTag.includes('quran')) return 'Islamic Studies';
+                if (lowerTag.includes('research')) return 'Research';
+            }
+            
+            // Then check title patterns
+            for (const [category, patterns] of Object.entries(CATEGORY_PATTERNS)) {
+                for (const pattern of patterns) {
+                    if (pattern.test(title)) {
+                        return category;
+                    }
+                }
+            }
+            
+            // Check content patterns if no title match
+            for (const [category, patterns] of Object.entries(CATEGORY_PATTERNS)) {
+                for (const pattern of patterns) {
+                    if (pattern.test(content.substring(0, 500))) {
+                        return category;
+                    }
+                }
+            }
+            
+            return 'Uncategorized';
+        }
+
+        // Toggle category expansion
+        function toggleCategory(category) {
+            if (expandedCategories.has(category)) {
+                expandedCategories.delete(category);
+            } else {
+                expandedCategories.add(category);
+            }
+            renderNotesList();
+        }
 
         // API helper with auth
         async function apiCall(endpoint, options = {}) {
@@ -787,12 +943,50 @@ Warning: Permanently added '46.224.127.221' (ED25519) to the list of known hosts
                 return;
             }
 
-            notesList.innerHTML = notes.map(note => `
-                <div class="note-item ${currentNote?.id === note.id ? 'active' : ''}" onclick="loadNote('${note.id}')">
-                    <div class="note-item-title">${note.title || 'Untitled'}</div>
-                    <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
-                </div>
-            `).join('');
+            // Group notes by category
+            const notesByCategory = {};
+            for (const note of notes) {
+                const category = getNoteCategory(note);
+                if (!notesByCategory[category]) {
+                    notesByCategory[category] = [];
+                }
+                notesByCategory[category].push(note);
+            }
+
+            // Sort categories: Uncategorized last, others alphabetically
+            const sortedCategories = Object.keys(notesByCategory).sort((a, b) => {
+                if (a === 'Uncategorized') return 1;
+                if (b === 'Uncategorized') return -1;
+                return a.localeCompare(b);
+            });
+
+            // Build HTML with categories
+            let html = '';
+            for (const category of sortedCategories) {
+                const categoryNotes = notesByCategory[category];
+                const isExpanded = expandedCategories.has(category) || isSearching;
+                const count = categoryNotes.length;
+
+                html += `
+                    <div class="category-section">
+                        <div class="category-header ${isExpanded ? 'expanded' : ''}" onclick="toggleCategory('${category.replace(/'/g, "\\'")}')">
+                            <span class="category-toggle ${isExpanded ? 'expanded' : ''}">▶</span>
+                            <span>${escapeHtml(category)}</span>
+                            <span class="category-count">${count}</span>
+                        </div>
+                        <div class="category-notes ${isExpanded ? 'expanded' : ''}" onclick="event.stopPropagation()">
+                            ${categoryNotes.map(note => `
+                                <div class="note-item ${currentNote?.id === note.id ? 'active' : ''}" onclick="event.stopPropagation(); loadNote('${note.id}')">
+                                    <div class="note-item-title">${escapeHtml(note.title || 'Untitled')}</div>
+                                    <div class="note-item-date">${new Date(note.updated_at).toLocaleDateString()}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            notesList.innerHTML = html;
 
             // Update search info
             if (isSearching) {
@@ -801,6 +995,17 @@ Warning: Permanently added '46.224.127.221' (ED25519) to the list of known hosts
             } else {
                 searchInfo.style.display = 'none';
             }
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         async function handleSearch() {
@@ -903,6 +1108,7 @@ Warning: Permanently added '46.224.127.221' (ED25519) to the list of known hosts
                     <div class="editor-actions">
                         <!-- READ-ONLY: button class="btn" onclick="saveNote()">Save</button -->
                         <!-- READ-ONLY: button class="btn btn-danger" onclick="deleteNote()">Delete</button -->
+                        <!-- READ-ONLY: button class="btn" onclick="downloadNote()">Download</button -->
                     </div>
                 </div>
                 <div class="editor-content">
