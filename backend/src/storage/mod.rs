@@ -173,14 +173,28 @@ impl NoteStorage {
         let all_notes = self.list()?;
         let query_lower = query.to_lowercase();
 
-        let results: Vec<Note> = all_notes
+        let mut scored: Vec<(i32, Note)> = all_notes
             .into_iter()
-            .filter(|note| {
-                note.title.to_lowercase().contains(&query_lower)
-                    || note.content.to_lowercase().contains(&query_lower)
+            .filter_map(|note| {
+                let title_match   = note.title.to_lowercase().contains(&query_lower);
+                let content_match = note.content.to_lowercase().contains(&query_lower);
+                if title_match || content_match {
+                    // Title match outranks content-only match
+                    let score = if title_match { 2 } else { 0 }
+                              + if content_match { 1 } else { 0 };
+                    Some((score, note))
+                } else {
+                    None
+                }
             })
             .collect();
 
-        Ok(results)
+        // Relevance first, then recency
+        scored.sort_by(|a, b| {
+            b.0.cmp(&a.0)
+             .then_with(|| b.1.updated_at.cmp(&a.1.updated_at))
+        });
+
+        Ok(scored.into_iter().map(|(_, note)| note).collect())
     }
 }

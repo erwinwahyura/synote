@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Islamic Studies Milestones | Visual Timeline</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, #f39c12, #e74c3c, #9b59b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: #888;
+            font-size: 1.1rem;
+        }
+
+        /* Timeline container */
+        .timeline {
+            position: relative;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Horizontal line */
+        .timeline::before {
+            content: '';
+            position: absolute;
+            top: 100px;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, 
+                #8B4513 0%,    /* Pre-modern brown */
+                #2E8B57 20%,   /* Orientalism green */
+                #DAA520 40%,   /* Philological gold */
+                #FF8C00 60%,   /* Post-colonial orange */
+                #DC143C 80%,   /* Saidian red */
+                #4169E1 100%   /* Contemporary blue */
+            );
+            border-radius: 2px;
+        }
+
+        /* Era sections */
+        .eras-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            position: relative;
+        }
+
+        .era {
+            flex: 1;
+            min-width: 200px;
+            position: relative;
+        }
+
+        /* Era marker on timeline */
+        .era-marker {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            position: absolute;
+            top: 90px;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 4px solid #fff;
+            box-shadow: 0 0 20px rgba(255,255,255,0.3);
+            z-index: 10;
+        }
+
+        .era[data-era="pre-modern"] .era-marker { background: #8B4513; }
+        .era[data-era="orientalism"] .era-marker { background: #2E8B57; }
+        .era[data-era="philological"] .era-marker { background: #DAA520; }
+        .era[data-era="post-colonial"] .era-marker { background: #FF8C00; }
+        .era[data-era="saidian"] .era-marker { background: #DC143C; }
+        .era[data-era="contemporary"] .era-marker { background: #4169E1; }
+
+        /* Era card */
+        .era-card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-top: 140px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .era-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+
+        .era-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .era-emoji {
+            font-size: 2rem;
+        }
+
+        .era-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        .era-period {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 1rem;
+        }
+
+        .era-innovation {
+            font-size: 0.9rem;
+            color: #aaa;
+            font-style: italic;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+        }
+
+        /* Scholars list */
+        .scholars {
+            margin-top: 1rem;
+        }
+
+        .scholar {
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            border-left: 3px solid;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .scholar:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateX(5px);
+        }
+
+        .era[data-era="pre-modern"] .scholar { border-color: #8B4513; }
+        .era[data-era="orientalism"] .scholar { border-color: #2E8B57; }
+        .era[data-era="philological"] .scholar { border-color: #DAA520; }
+        .era[data-era="post-colonial"] .scholar { border-color: #FF8C00; }
+        .era[data-era="saidian"] .scholar { border-color: #DC143C; }
+        .era[data-era="contemporary"] .scholar { border-color: #4169E1; }
+
+        .scholar-name {
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .scholar-work {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 0.25rem;
+        }
+
+        .scholar-significance {
+            font-size: 0.75rem;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        /* Turning points */
+        .turning-point {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+            border-radius: 12px;
+            padding: 1rem;
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .turning-point-year {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #f39c12;
+        }
+
+        .turning-point-event {
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Key transformation points section */
+        .transformation-points {
+            max-width: 1400px;
+            margin: 4rem auto;
+            padding: 2rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 20px;
+        }
+
+        .transformation-points h2 {
+            text-align: center;
+            margin-bottom: 2rem;
+            font-size: 1.8rem;
+        }
+
+        .points-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .point-card {
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border-left: 4px solid #f39c12;
+        }
+
+        .point-year {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #f39c12;
+            margin-bottom: 0.5rem;
+        }
+
+        .point-event {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .point-impact {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 4rem;
+            padding: 2rem;
+            color: #666;
+        }
+
+        .footer a {
+            color: #4169E1;
+            text-decoration: none;
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .eras-container {
+                flex-wrap: wrap;
+            }
+            .era {
+                min-width: 300px;
+                flex: 0 0 calc(50% - 1rem);
+            }
+            .timeline::before {
+                display: none;
+            }
+            .era-marker {
+                display: none;
+            }
+            .era-card {
+                margin-top: 0;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .era {
+                flex: 1 1 100%;
+            }
+            .header h1 {
+                font-size: 1.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>🕌 Islamic Studies Milestones</h1>
+        <p>1,400 Years of Scholarship (610 CE – 2026 CE)</p>
+    </header>
+
+    <main class="timeline">
+        <div class="eras-container">
+            <!-- Era cards will be generated from JSON -->
+            <article class="era" data-era="pre-modern">
+                <div class="era-marker"></div>
+                <div class="era-card">
+                    <div class="era-header">
+                        <span class="era-emoji">🕌</span>
+                        <h3 class="era-title">Pre-Modern Islamic Scholarship</h3>
+                    </div>
+                    <p class="era-period">7th–18th centuries</p>
+                    <p class="era-innovation">Isnad system for source verification</p>
+                    <div class="scholars">
+                        <div class="scholar">
+                            <div class="scholar-name">Ibn al-Nadim (d. 995)</div>
+                            <div class="scholar-work">Fihrist</div>
+                            <div class="scholar-significance">First comprehensive bibliography of Islamic texts</div>
+                        </div>
+                        <div class="scholar">
+                            <div class="scholar-name">Ibn Khaldun (d. 1406)</div>
+                            <div class="scholar-work">Muqaddima</div>
+                            <div class="scholar-significance">Historiographical theory; asabiyya concept</div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="era" data-era="orientalism">
+                <div class="era-marker"></div>
+                <div class="era-card">
+                    <div class="era-header">
+                        <span class="era-emoji">🗺️</span>
+                        <h3 class="era-title">European Orientalism</h3>
+                    </div>
+                    <p class="era-period">18th–19th centuries</p>
+                    <p class="era-innovation">Systematic translation and edition</p>
+                    <div class="turning-point">
+                        <div class="turning-point-year">1798</div>
+                        <div class="turning-point-event">Napoleonic expedition to Egypt</div>
+                    </div>
+                    <div class="scholars">
+                        <div class="scholar">
+                            <div class="scholar-name">Silvestre de Sacy (1758–1838)</div>
+                            <div class="scholar-work">Chrestomathie arabe (1806)</div>
+                            <div class="scholar-significance">Father of Arabists; pedagogical foundation</div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="era" data-era="philological">
+                <div class="era-marker"></div>
+                <div class="era-card">
+                    <div class="era-header">
+                        <span class="era-emoji">🔍</span>
+                        <h3 class="era-title">The Philological Era</h3>
+                    </div>
+                    <p class="era-period">1850–1950</p>
+                    <p class="era-innovation">Critical method applied to Islamic sources</p>
+                    <div class="scholars">
+                        <div class="scholar">
+                            <div class="scholar-name">Theodor Nöldeke (1836–1930)</div>
+                            <div class="scholar-work">Geschichte des Qorâns (1860)</div>
+                            <div class="scholar-significance">First critical history of Quranic text</div>
+                        </div>
+                        <div class="scholar">
+                            <div class="scholar-name">Ignaz Goldziher (1850–1921)</div>
+                            <div class="scholar-work">Muhammedanische Studien (1889)</div>
+                            <div class="scholar-significance">Critical hadith studies foundation</div>
+                        </div>
+                        <div class="scholar">
+                            <div class="scholar-name">Joseph Schacht (1902–1969)</div>
+                            <div class="scholar-work">Origins of Muhammadan Jurisprudence (1950)</div>
+                            <div class="scholar-significance">Revolutionary: law originated in Iraq</div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="era" data-era="post-colonial">
+                <div class="era-marker"></div>
+                <div class="era-card">
+                    <div class="era-header">
+                        <span class="era-emoji">🌍</span>
+                        <h3 class="era-title">Post-Colonial Turn</h3>
+                    </div>
+                    <p class="era-period">1950–1980</p>
+                    <p class="era-innovation">Area studies; fieldwork methodology</p>
+                    <div class="scholars">
+                        <div class="scholar">
+                            <div class="scholar-name">Marshall Hodgson (1922–1968)</div>
+                            <div class="scholar-work">The Venture of Islam (1974)</div>
+                            <div class="scholar-significance">Islamicate vs. Islamic; civilizational approach</div>
+                        </div>
+                        <div class="scholar">
+                            <div class="scholar-name">Clifford Geertz (1926–2006)</div>
+                            <div class="scholar-work">Islam Observed (1968)</div>
+                            <div class="scholar-significance">Anthropological turn; thick description</div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="era" data-era="saidian">
+                <div class="era-marker"></div>
+                <div class="era-card">
+                    <div class="era-header">
+                        <span class="era-emoji">⚡</span>
+                        <h3 class="era-title">The Saidian Revolution</h3>
+                    </div>
+                    <p class="era-period">1978–2000</p>
+                    <p class="era-innovation">Questioning politics of knowledge production</p>
+                    <div class="turning-point">
+                        <div class="turning-point-year">1978</div>
+                        <div class="turning-point-event">Said's Orientalism published</div>
+                    </div>
+                    <div class="scholars">
+                        <div class="scholar">
+                            <div class="scholar-name">Edward Said (1935–2003)</div>
+                            <div class="scholar-work">Orientalism (1978)</div>
+                            <div class="scholar-significance">Postcolonial critique transforms field</div>
+                        </div>
+                        <div class="scholar">
+                            <div class="scholar-name">Patricia Crone (1945–2015)</div>
+                            <div class="scholar-work">Hagarism (1977)</div>
+                            <div class="scholar-significance">Radical revisionism; non-Muslim sources</div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="era" data-era="contemporary">
+                <div class="era-marker"></div>
+                <div class="era-card">
+                    <div class="era-header">
+                        <span class="era-emoji">💻</span>
+                        <h3 class="era-title">Contemporary Landscape</h3>
+                    </div>
+                    <p class="era-period">2000–present</p>
+                    <p class="era-innovation">Digital humanities; democratized access</p>
+                    <div class="turning-point">
+                        <div class="turning-point-year">2000s</div>
+                        <div class="turning-point-event">Digital revolution begins</div>
+                    </div>
+                    <div class="scholars">
+                        <div class="scholar">
+                            <div class="scholar-name">Angelika Neuwirth (b. 1943)</div>
+                            <div class="scholar-work">The Quran and Late Antiquity (2019)</div>
+                            <div class="scholar-significance">Literary-historical synthesis</div>
+                        </div>
+                        <div class="scholar">
+                            <div class="scholar-name">Shahab Ahmed (1966–2015)</div>
+                            <div class="scholar-work">What Is Islam? (2015)</div>
+                            <div class="scholar-significance">Redefinition of the field</div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+        </div>
+    </main>
+
+    <section class="transformation-points">
+        <h2>📍 Key Transformation Points</h2>
+        <div class="points-grid">
+            <div class="point-card">
+                <div class="point-year">1453</div>
+                <div class="point-event">Fall of Constantinople</div>
+                <div class="point-impact">Triggers European interest in Islam; Ottoman expansion</div>
+            </div>
+            <div class="point-card">
+                <div class="point-year">1798</div>
+                <div class="point-event">Napoleonic Expedition</div>
+                <div class="point-impact">Scientific Orientalism begins; state-sponsored scholarship</div>
+            </div>
+            <div class="point-card">
+                <div class="point-year">1850s</div>
+                <div class="point-event">German Philological Revolution</div>
+                <div class="point-impact">Critical method established; Nöldeke, Goldziher era</div>
+            </div>
+            <div class="point-card">
+                <div class="point-year">1974</div>
+                <div class="point-event">Hodgson's Venture of Islam</div>
+                <div class="point-impact">Civilizational approach; Islamicate concept</div>
+            </div>
+            <div class="point-card">
+                <div class="point-year">1978</div>
+                <div class="point-event">Said's Orientalism</div>
+                <div class="point-impact">Postcolonial critique transforms field</div>
+            </div>
+            <div class="point-card">
+                <div class="point-year">2000s</div>
+                <div class="point-event">Digital Revolution</div>
+                <div class="point-impact">Democratized access; Global South scholars</div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="footer">
+        <p>Full details in <a href="/note/94e02b03-7091-447b-b347-d803a1702503">Islamic Studies Volume 18</a></p>
+        <p style="margin-top: 1rem; font-size: 0.85rem;">Data source: milestones-islamic-studies.json</p>
+    </footer>
+
+    <script>
+        // Fetch and populate from JSON
+        fetch('/milestones-islamic-studies.json')
+            .then(r => r.json())
+            .then(data => {
+                // Populate dynamic content here
+                console.log('Loaded milestones data:', data);
+            });
+    </script>
+</body>
+</html>

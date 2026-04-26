@@ -1,192 +1,162 @@
 # Synote
 
-A self-hosted personal note-taking application inspired by Obsidian and Notion, built with Rust.
+A self-hosted personal note-taking app inspired by Obsidian, built with Rust. Notes are stored as plain markdown files — no database, no lock-in.
+
+**Live instance:** [research.erwarx.com](https://research.erwarx.com)
 
 ## Features
 
-### Core Features
-- ✅ Create, edit, and delete markdown notes
-- ✅ File-based storage (notes stored as .md files)
-- ✅ **Split-view editor** with live markdown preview
-- ✅ **Syntax highlighting** for code blocks
-- ✅ **Real-time search** across all notes
-- ✅ **Auto-save** functionality
-- ✅ Self-hosted and privacy-focused
+### Multi-Pane Workspace
+- Open multiple notes side-by-side (up to 5 panes)
+- Drag the handle between panes to resize
+- Minimize panes to a vertical strip, restore with a click
+- Per-pane back/forward navigation history
+- Click a note in the sidebar to open it; if already open, scrolls to it
 
-### Editor Features
-- ✅ Live markdown preview (GitHub Flavored Markdown)
-- ✅ Syntax highlighting for code blocks
-- ✅ Auto-save (2 seconds after last edit)
-- ✅ Keyboard shortcuts (Cmd+S to save, Cmd+K to search)
+### Editor
+- Click a note to preview it; click **Edit** to open the split editor modal
+- Live markdown preview (GitHub Flavored Markdown)
+- Syntax highlighting for code blocks
+- Drag-and-drop or paste images directly into the editor
+- Resizable editor/preview split
+- `⌘S` to save
 
 ### Linking & Organization
-- ✅ **Bidirectional linking** (`[[Note]]` syntax) - Click to navigate, create missing notes
-- ✅ **Tags and filtering** - Sidebar tag list, click to filter notes by tag
-- ✅ **Graph view** - Visualize note connections via wikilinks
-- ✅ **Tag-based graph connections** - Notes sharing the same tag are connected (green dashed lines)
-- ✅ **Backlinks panel** - See all notes linking to current note
+- **Wikilinks** — `[[Note Title]]` syntax; click to navigate within the same pane
+- **Hover previews** — hover a wikilink to see a content excerpt
+- **Broken link creation** — click a `[[broken link]]` to create the note instantly
+- **Backlinks panel** — every pane shows incoming and outgoing links
+- **Tags** — write `#tagname` anywhere; click a tag to filter notes
+- **Graph view** — D3 force graph of all wikilink connections; click nodes to open notes
+- **Table of contents** — auto-generated per pane for notes with 3+ headings
+
+### Sidebar
+- Real-time title search with match highlighting
+- **Pinned notes** — star any note (☆ in the pane topbar) to float it to the top
+- **Recently viewed** section
+- Sort by: last updated, title A→Z, created, or last viewed
+- Resizable sidebar
+
+### View & Navigation
+- **Dark mode** — `⌘D` or click the moon icon
+- **Zen / focus mode** — `⌘.` hides the sidebar; hover a pane to reveal controls
+- **Command palette** — `⌘K` to jump to any note; shows recently viewed when empty
+- **Keyboard shortcuts cheatsheet** — press `?`
+- **Word count + reading time** — shown in the footer of every pane
+- **Inline rename** — double-click a pane title to rename the note
+
+### Export
+- Export any pane as **Markdown** (`.md` download)
+- **Print / PDF** via browser print dialog
 
 ### Production Ready
-- ✅ Docker deployment with health checks
-- ✅ Automatic HTTPS with Let's Encrypt (Caddy)
-- ✅ Security headers & CSP
-- ✅ Authentication support
-- ✅ Automated backups
-- ✅ **Persistent volume storage** - Data saved on Hetzner persistent volume
-
-### In Progress
-- 🔄 **Advanced search with Tantivy** - Backend module ready, needs API integration
-- 🔄 **Folder organization** - Backend structure ready, needs UI implementation
-
-### Coming Soon
-- 🔲 Real-time sync across devices (git-based or CRDT)
-- 🔲 Mobile-optimized UI
-- 🔲 Plugin/extension system
-
-## Data Storage
-
-Your notes are stored as **plain markdown files** on a **persistent Hetzner volume**:
-
-| Location | Path | Purpose |
-|----------|------|---------|
-| **Production data** | `/mnt/apps-data/synote/` | Live notes storage |
-| **Daily backups** | `/mnt/apps-data/synote-backups/` | Automated backups |
-| **Live URL** | `https://research.erwarx.com` | Production instance |
-
-**Benefits:**
-- ✅ Human-readable `.md` files (not locked in database)
-- ✅ Easy backup/restore (just copy files)
-- ✅ Git-compatible for version control
-- ✅ Portable across systems
+- Docker deployment with health checks
+- Automatic HTTPS via Let's Encrypt (Caddy)
+- Security headers & CSP
+- Token-based authentication
+- Automated daily backups
+- Persistent volume storage (Hetzner)
 
 ## Quick Start
 
 ### Prerequisites
 
-- Rust 1.70+ (install from [rustup.rs](https://rustup.rs/))
+- Rust 1.70+ — [rustup.rs](https://rustup.rs)
 - A modern web browser
 
-### Running the Backend
+### Run locally
 
-1. Navigate to the backend directory:
+**1. Start the backend:**
 ```bash
 cd backend
-```
-
-2. Build and run the server:
-```bash
 cargo run
 ```
+The API starts on `http://localhost:8080`.
 
-The server will start on `http://localhost:8080`
-
-### Using the Frontend
-
-1. Open `frontend/public/index.html` in your web browser, or
-2. Use a simple HTTP server:
+**2. Serve the frontend:**
 ```bash
 cd frontend/public
-python3 -m http.server 3000
+python3 -m http.server 3001
 ```
 
-Then visit `http://localhost:3000`
+**3. Open** `http://localhost:3001`
 
 ## Production Deployment
 
 ### Option 1: Docker (Recommended)
 
-#### Quick Start (Development)
+**Development:**
 ```bash
 cd docker
 docker-compose up --build
 ```
 
-#### Production with HTTPS
+**Production with HTTPS:**
+```bash
+git clone https://github.com/erwinwahyura/synote.git
+cd synote/docker
 
-1. **Clone and enter the directory:**
-   ```bash
-   git clone https://github.com/erwinwahyura/synote.git
-   cd synote/docker
-   ```
+export DOMAIN=notes.yourdomain.com
+export SYNOTE_AUTH_TOKEN=$(openssl rand -hex 32)
+echo "Token: $SYNOTE_AUTH_TOKEN"
 
-2. **Set your domain:**
-   ```bash
-   export DOMAIN=notes.yourdomain.com
-   ```
+docker-compose -f docker-compose.prod.yml up -d
+```
 
-3. **Set a secure authentication token:**
-   ```bash
-   export SYNOTE_AUTH_TOKEN=$(openssl rand -hex 32)
-   echo "Token: $SYNOTE_AUTH_TOKEN"
-   ```
+HTTPS is configured automatically via Let's Encrypt. Visit `https://notes.yourdomain.com`.
 
-4. **Start the production stack:**
-   ```bash
-   docker-compose -f docker-compose.prod.yml up -d
-   ```
-
-5. **Access your instance:**
-   - HTTPS will be automatically configured via Let's Encrypt
-   - Visit `https://notes.yourdomain.com`
-
-#### Production Features
 | Feature | Description |
 |---------|-------------|
 | 🔒 Automatic HTTPS | Let's Encrypt certificates (auto-renew) |
-| 🛡️ Security Headers | CSP, HSTS, X-Frame-Options, etc. |
+| 🛡️ Security Headers | CSP, HSTS, X-Frame-Options |
 | ♻️ Auto-restart | Container restarts on crash |
 | 🏥 Health Checks | Automatic monitoring & recovery |
-| 💾 Daily Backups | Automated note backups to persistent volume |
+| 💾 Daily Backups | Automated backups to persistent volume |
 | 🚀 Gzip Compression | Faster content delivery |
 
-#### Environment Variables
+**Environment variables:**
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DOMAIN` | Your domain for HTTPS | `localhost` |
 | `SYNOTE_AUTH_TOKEN` | API authentication token | `changeme` |
-| `RUST_LOG` | Logging level (error/warn/info/debug) | `info` |
+| `RUST_LOG` | Logging level | `info` |
 
-### Option 2: Hetzner Deployment (Current Setup)
+### Option 2: Hetzner (Current Setup)
 
-**Server:** `46.224.127.221` (hetzner-cx23)
-**Data Volume:** `/mnt/apps-data/synote/` (persistent)
-**Caddy:** Reverse proxy with automatic HTTPS
+**Server:** `46.224.127.221` (hetzner-cx23)  
+**Data:** `/mnt/apps-data/synote/` (persistent volume)  
+**Proxy:** Caddy with automatic HTTPS
 
 ```bash
-# On Hetzner server
 cd /home/deploy/synote
-docker compose pull
-docker compose up -d
+docker compose pull && docker compose up -d
 ```
 
 ## Project Structure
 
 ```
 synote/
-├── backend/          # Rust backend (Axum web server)
-│   ├── src/
-│   │   ├── api/      # REST API endpoints (notes, tags, links, graph)
-│   │   ├── models/   # Data models
-│   │   ├── storage/  # File system operations
-│   │   ├── links/    # Wikilink parsing and index
-│   │   ├── tags/     # Tag extraction and index
-│   │   └── main.rs
-│   └── Cargo.toml
-├── frontend/         # Web frontend (vanilla JS + D3.js for graph)
+├── backend/          # Rust/Axum API server
+│   └── src/
+│       ├── api/      # REST endpoints (notes, tags, links, graph)
+│       ├── models/   # Data models
+│       ├── storage/  # File system operations
+│       ├── links/    # Wikilink parsing and index
+│       ├── tags/     # Tag extraction and index
+│       └── main.rs
+├── frontend/
 │   └── public/
-│       └── index.html
-├── docker/           # Docker configurations
+│       └── index.html   # Entire frontend (single file, vanilla JS)
+├── docker/
 │   ├── docker-compose.yml
 │   ├── docker-compose.prod.yml
 │   └── Caddyfile
 ├── data/
-│   └── notes/        # Your notes are stored here (markdown files)
-└── config.toml       # Configuration file
+│   └── notes/        # Markdown note files
+└── config.toml
 ```
 
 ## Configuration
-
-Edit `config.toml` to customize:
 
 ```toml
 [server]
@@ -198,7 +168,7 @@ notes_dir = "./data/notes"
 
 [auth]
 enabled = true
-token = "your-secure-token-here"  # Set via SYNOTE_AUTH_TOKEN env var
+token = "your-secure-token-here"  # or set SYNOTE_AUTH_TOKEN env var
 ```
 
 ## API Endpoints
@@ -206,105 +176,61 @@ token = "your-secure-token-here"  # Set via SYNOTE_AUTH_TOKEN env var
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/notes` | List all notes |
-| POST | `/api/notes` | Create a new note |
-| GET | `/api/notes/:id` | Get a specific note |
+| POST | `/api/notes` | Create a note |
+| GET | `/api/notes/:id` | Get a note |
 | PUT | `/api/notes/:id` | Update a note |
 | DELETE | `/api/notes/:id` | Delete a note |
-| GET | `/api/search?q=query` | Search notes |
+| GET | `/api/search?q=query` | Search notes by title |
 | GET | `/api/tags` | List all tags with counts |
-| GET | `/api/tags/:tag/notes` | Get notes with specific tag |
-| GET | `/api/notes/:id/tags` | Get tags for a note |
-| GET | `/api/notes/:id/links` | Get wikilinks for a note |
-| GET | `/api/graph?include_tags=true` | Get graph data (nodes + edges) |
+| GET | `/api/tags/:tag/notes` | Notes with a specific tag |
+| GET | `/api/notes/:id/links` | Wikilinks for a note |
+| GET | `/api/graph` | Graph data (nodes + edges) |
 
-### Authentication
-When auth is enabled, include the token in the `Authorization` header:
-```
-Authorization: Bearer your-token-here
-```
+**Authentication:** include `Authorization: Bearer <token>` on all requests when auth is enabled.
 
-## Using the App
+## Keyboard Shortcuts
 
-### Creating Notes
-1. Click **"New Note"** button
-2. Add title and content
-3. Auto-saves after 2 seconds of inactivity
-
-### Adding Tags
-Type `#tagname` anywhere in note content. Tags appear in sidebar.
-
-### Creating Links
-Type `[[Note Title]]` to link to another note. Creates bidirectional connection.
-- If note doesn't exist, click to create it
-- Graph view shows all connections
-
-### Viewing Graph
-Click **🕸️ Graph** button to see:
-- **Solid lines**: Wikilink connections
-- **Green dashed lines**: Tag-based connections (notes sharing same tag)
-- Click any node to open that note
-
-### Filtering by Tag
-Click any tag in the sidebar to show only notes with that tag.
-
-## Development
-
-See [project.md](project.md) for the full roadmap and development plan.
-
-### Running in Development Mode
-
-```bash
-cd backend
-cargo watch -x run  # Auto-reload on changes (requires cargo-watch)
-```
-
-### Running Tests
-
-```bash
-cd backend
-cargo test
-```
+| Shortcut | Action |
+|----------|--------|
+| `⌘K` | Command palette |
+| `⌘S` | Save note (in editor) |
+| `⌘D` | Toggle dark mode |
+| `⌘.` | Toggle zen mode |
+| `?` | Show all shortcuts |
+| `Esc` | Close overlay / exit zen mode |
+| `dbl-click title` | Rename note inline |
 
 ## Backup & Restore
 
-### Automated Backup (Production)
-Your notes are automatically backed up daily to `/mnt/apps-data/synote-backups/`.
+Notes are plain `.md` files — just copy the data directory.
 
-### Manual Backup
-Your notes are plain markdown files. Simply copy the data directory:
 ```bash
-# From Hetzner server
-sudo cp -r /mnt/apps-data/synote /path/to/backup
-
-# Or download via scp
+# Manual backup from Hetzner
 scp -r deploy@46.224.127.221:/mnt/apps-data/synote ./backup
+
+# Restore
+docker compose down
+cp -r ./backup /mnt/apps-data/synote
+docker compose up -d
 ```
 
-### Restore
-1. Stop the server: `docker compose down`
-2. Copy your backup to `/mnt/apps-data/synote/`
-3. Start the server: `docker compose up -d`
+Automated daily backups run to `/mnt/apps-data/synote-backups/` in production.
 
-## Security Considerations
+## Security
 
-- Change the default `SYNOTE_AUTH_TOKEN` in production
-- Use HTTPS (handled automatically in Docker production setup)
-- Keep your server and Rust dependencies updated
-- Back up your notes regularly
-- Run behind a firewall/VPN for additional protection
+- Change `SYNOTE_AUTH_TOKEN` before deploying
+- HTTPS is handled automatically in the Docker production setup
+- Keep Rust dependencies updated (`cargo update`)
+
+## Tech Stack
+
+- **Backend:** [Axum](https://github.com/tokio-rs/axum) (Rust)
+- **Frontend:** Vanilla JS, single HTML file
+- **Markdown:** [marked.js](https://marked.js.org)
+- **Syntax highlighting:** [highlight.js](https://highlightjs.org)
+- **Graph:** [D3.js](https://d3js.org)
+- **Proxy:** [Caddy](https://caddyserver.com)
 
 ## License
 
-See [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Found a bug or have a feature request? Open an issue on GitHub!
-
-## Acknowledgments
-
-- Built with [Axum](https://github.com/tokio-rs/axum) web framework
-- Inspired by [Obsidian](https://obsidian.md) and [Notion](https://notion.so)
-- Markdown rendering by [marked](https://marked.js.org)
-- Syntax highlighting by [highlight.js](https://highlightjs.org)
-- Graph visualization by [D3.js](https://d3js.org)
+See [LICENSE](LICENSE) for details.
