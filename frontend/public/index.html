@@ -1906,8 +1906,17 @@ async function showLoginModal(forceTab) {
     let hasUsers = true;
     try {
         const st = await fetch(`${API_URL}/auth/status`);
-        if (st.ok) hasUsers = (await st.json()).has_users;
-    } catch { /* offline — assume users exist */ }
+        if (st.ok) {
+            hasUsers = (await st.json()).has_users;
+        } else {
+            // If auth/status returns 401 or other error, assume users exist
+            // (the backend might require auth for this endpoint incorrectly)
+            hasUsers = true;
+        }
+    } catch { 
+        // offline or error — assume users exist
+        hasUsers = true; 
+    }
 
     const defaultTab = forceTab || (hasUsers ? 'login' : 'register');
 
