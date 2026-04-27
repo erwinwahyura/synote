@@ -2876,6 +2876,15 @@ async function openDailyNote() {
     } catch { showNotification('Failed to create daily note', 'error'); }
 }
 
+// Stub functions for features not in this version
+function toggleFolderView() {
+    showNotification('Folder view not available in this version', 'info');
+}
+
+function toggleTagCloud() {
+    showNotification('Tag cloud not available in this version', 'info');
+}
+
 function copyCode(preId) {
     const pre = document.getElementById(preId);
     if (!pre) return;
