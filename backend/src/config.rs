@@ -5,7 +5,6 @@ use std::path::PathBuf;
 pub struct Config {
     pub server: ServerConfig,
     pub storage: StorageConfig,
-    pub auth: AuthConfig,
     pub sync: SyncConfig,
 }
 
@@ -21,14 +20,6 @@ pub struct ServerConfig {
 pub struct StorageConfig {
     #[serde(default = "default_notes_dir")]
     pub notes_dir: PathBuf,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AuthConfig {
-    #[serde(default)]
-    pub enabled: bool,
-    #[serde(default = "default_token")]
-    pub token: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,10 +46,6 @@ fn default_notes_dir() -> PathBuf {
     PathBuf::from("./data/notes")
 }
 
-fn default_token() -> String {
-    std::env::var("SYNOTE_AUTH_TOKEN").unwrap_or_else(|_| "changeme".to_string())
-}
-
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -68,10 +55,6 @@ impl Default for Config {
             },
             storage: StorageConfig {
                 notes_dir: default_notes_dir(),
-            },
-            auth: AuthConfig {
-                enabled: false,
-                token: default_token(),
             },
             sync: SyncConfig {
                 enabled: default_git_remote().is_some(),
@@ -86,23 +69,12 @@ impl Config {
         // Try to load from config.toml, fall back to defaults
         let config_path = PathBuf::from("config.toml");
 
-        let mut config = if config_path.exists() {
+        let config = if config_path.exists() {
             let content = std::fs::read_to_string(config_path)?;
             toml::from_str(&content)?
         } else {
             Config::default()
         };
-
-        // Override token from environment if set
-        if let Ok(token) = std::env::var("SYNOTE_AUTH_TOKEN") {
-            config.auth.token = token;
-            config.auth.enabled = true;
-        }
-
-        // Ensure auth is enabled if a non-default token is set
-        if config.auth.token != "changeme" && !config.auth.token.is_empty() {
-            config.auth.enabled = true;
-        }
 
         Ok(config)
     }
@@ -117,17 +89,5 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.server.port, 8080);
         assert_eq!(config.server.host, "127.0.0.1");
-        assert!(!config.auth.enabled);
-    }
-
-    #[test]
-    fn test_custom_token_enables_auth() {
-        let toml_str = r#"
-[auth]
-token = "custom-secret-token"
-"#;
-        let config: Config = toml::from_str(toml_str).unwrap();
-        assert!(config.auth.enabled);
-        assert_eq!(config.auth.token, "custom-secret-token");
     }
 }

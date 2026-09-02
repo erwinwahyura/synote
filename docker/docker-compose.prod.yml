@@ -13,7 +13,6 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG=info
-      - SYNOTE_AUTH_TOKEN=${SYNOTE_AUTH_TOKEN:-changeme}
     volumes:
       - synote-data:/app/data/notes
       # Config is baked into image, override if needed:

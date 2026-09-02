@@ -7,7 +7,6 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG=info
-      - SYNOTE_AUTH_TOKEN=4577e6051d67d0157759b42985def9090e964d3d6d58e295ffa9732b3579aa37
     volumes:
       - /mnt/apps-data/synote:/app/data/notes
     ports:

@@ -40,10 +40,6 @@ regex = "1.10"
 lazy_static = "1.4"
 urlencoding = "2.1"
 
-# Auth: password hashing + JWT
-bcrypt = "0.15"
-jsonwebtoken = "9"
-
 # Search - Tantivy (disabled temporarily - needs API migration)
 # tantivy = "0.21"
 

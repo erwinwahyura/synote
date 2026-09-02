@@ -1081,6 +1081,86 @@
 
         .graph-canvas { flex: 1; background: #0d0d1a; cursor: grab; }
         .graph-canvas:active { cursor: grabbing; }
+
+        /* ── Milestones view ────────────────────────────────────── */
+        .milestones-container {
+            flex: 1; display: flex; flex-direction: column;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            overflow-y: auto; color: #fff;
+        }
+        .milestones-header {
+            padding: 12px 18px; background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex; justify-content: space-between; align-items: center;
+            position: sticky; top: 0; z-index: 10; backdrop-filter: blur(10px);
+        }
+        .milestones-header h2 { font-size: 14px; font-weight: 600; color: #fff; }
+        .milestones-body { padding: 2rem; max-width: 1400px; margin: 0 auto; width: 100%; }
+        .milestones-title { text-align: center; margin-bottom: 0.5rem; font-size: 2rem; font-weight: 700;
+            background: linear-gradient(90deg, #f39c12, #e74c3c, #9b59b6);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .milestones-subtitle { text-align: center; color: #888; font-size: 1rem; margin-bottom: 3rem; }
+        .ms-timeline { position: relative; }
+        .ms-timeline::before {
+            content: ''; position: absolute; top: 88px; left: 0; right: 0; height: 4px;
+            background: linear-gradient(90deg, #8B4513 0%, #2E8B57 20%, #DAA520 40%, #FF8C00 60%, #DC143C 80%, #4169E1 100%);
+            border-radius: 2px;
+        }
+        .ms-eras { display: flex; justify-content: space-between; gap: 1rem; position: relative; }
+        .ms-era { flex: 1; min-width: 200px; position: relative; }
+        .ms-era-marker {
+            width: 20px; height: 20px; border-radius: 50%;
+            position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+            border: 3px solid #fff; box-shadow: 0 0 16px rgba(255,255,255,0.3); z-index: 10;
+        }
+        .ms-era-card {
+            background: rgba(255,255,255,0.06); backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 14px;
+            padding: 1.25rem; margin-top: 120px;
+            transition: transform 0.25s, box-shadow 0.25s;
+        }
+        .ms-era-card:hover { transform: translateY(-4px); box-shadow: 0 10px 32px rgba(0,0,0,0.35); }
+        .ms-era-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.75rem; }
+        .ms-era-emoji { font-size: 1.6rem; }
+        .ms-era-name { font-size: 1rem; font-weight: 600; line-height: 1.3; }
+        .ms-era-period { font-size: 0.8rem; color: #888; margin-bottom: 0.75rem; }
+        .ms-era-innovation { font-size: 0.82rem; color: #aaa; font-style: italic; padding: 0.4rem 0.6rem;
+            background: rgba(0,0,0,0.25); border-radius: 6px; margin-bottom: 0.75rem; }
+        .ms-turning-point { background: rgba(255,255,255,0.08); border-radius: 10px;
+            padding: 0.75rem; margin-bottom: 0.75rem; text-align: center; }
+        .ms-tp-year { font-size: 1.4rem; font-weight: 700; color: #f39c12; }
+        .ms-tp-event { font-size: 0.8rem; margin-top: 0.25rem; color: #ccc; }
+        .ms-scholars { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.4rem; }
+        .ms-scholar {
+            background: rgba(0,0,0,0.2); border-radius: 7px; padding: 0.6rem 0.75rem;
+            border-left: 3px solid; cursor: default; transition: background 0.2s, transform 0.2s;
+        }
+        .ms-scholar:hover { background: rgba(255,255,255,0.09); transform: translateX(4px); }
+        .ms-scholar-name { font-weight: 600; font-size: 0.88rem; margin-bottom: 0.15rem; }
+        .ms-scholar-work { font-size: 0.75rem; color: #888; margin-bottom: 0.15rem; }
+        .ms-scholar-sig { font-size: 0.72rem; color: #666; line-height: 1.4; }
+        .ms-transform-section { margin: 3rem 0; }
+        .ms-transform-section h3 { text-align: center; font-size: 1.3rem; margin-bottom: 1.5rem; color: #ddd; }
+        .ms-points-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+        .ms-point-card { background: rgba(0,0,0,0.25); border-radius: 10px; padding: 1.25rem; border-left: 4px solid #f39c12; }
+        .ms-point-year { font-size: 1.8rem; font-weight: 700; color: #f39c12; margin-bottom: 0.25rem; }
+        .ms-point-event { font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem; }
+        .ms-point-impact { color: #888; font-size: 0.85rem; }
+        .ms-footer { text-align: center; margin-top: 2rem; padding: 1.5rem; color: #555; font-size: 0.85rem; }
+        .ms-footer a { color: #6d5ef5; text-decoration: none; }
+        .ms-footer a:hover { text-decoration: underline; }
+        @media (max-width: 1100px) {
+            .ms-eras { flex-wrap: wrap; }
+            .ms-era { min-width: 280px; flex: 0 0 calc(50% - 0.5rem); }
+            .ms-timeline::before, .ms-era-marker { display: none; }
+            .ms-era-card { margin-top: 0; }
+        }
+        @media (max-width: 640px) {
+            .ms-era { flex: 1 1 100%; }
+            .milestones-body { padding: 1rem; }
+            .milestones-title { font-size: 1.4rem; }
+        }
+
         .graph-node { cursor: pointer; }
         .graph-node circle { fill: var(--accent); stroke: rgba(255,255,255,0.15); stroke-width: 2px; transition: all 0.2s; }
         .graph-node:hover circle { fill: #a89cff; }
@@ -1657,12 +1737,11 @@
                 <button class="icon-btn" id="zenToggle" onclick="toggleZenMode()" title="Zen mode (⌘.)">◎</button>
                 <button class="icon-btn" id="darkToggle" onclick="toggleDarkMode()" title="Toggle dark mode (⌘D)">🌙</button>
                 <button class="icon-btn" onclick="cycleFontSize()" id="fontSizeBtn" title="Font size">Aa</button>
-                <button class="icon-btn" id="userMenuBtn" onclick="logout()" title="Sign out"
-                    style="display:none;font-size:11px;font-weight:700;background:var(--accent);color:white;border-radius:50%;width:26px;height:26px;padding:0;line-height:1;"></button>
             </div>
         </div>
         <div class="sidebar-toolbar">
             <button class="graph-btn" onclick="showGraphView()">⬡ Graph</button>
+            <button class="graph-btn" onclick="showMilestonesView('islamic-studies')" title="Islamic Studies Milestones">🕌 Milestones</button>
             <button class="graph-btn" id="folderViewBtn" onclick="toggleFolderView()" style="flex:0 0 auto;padding:6px 8px;" title="Folder view">📁</button>
             <button class="graph-btn" onclick="showStatsModal()" style="flex:0 0 auto;padding:6px 8px;" title="Stats">📊</button>
             <button class="graph-btn" id="tagCloudBtn" onclick="toggleTagCloud()" style="flex:0 0 auto;padding:6px 8px;" title="Tag cloud">🏷</button>
@@ -1742,7 +1821,6 @@ const API_URL = window.location.hostname === 'localhost'
 let openPanes    = [];   // [{ uid, note, history:[], historyIdx }]
 let notes        = [];   // sidebar list
 let currentNote  = null;
-let authToken    = localStorage.getItem('synote_token');
 let searchTimeout = null;
 let isSearching  = false;
 let sortOrder    = localStorage.getItem('synote_sort') || 'updated';
@@ -1771,7 +1849,6 @@ function init() {
     initSidebarHover();
     initMarkdownImport();
     initWordCountGoal();
-    updateUserDisplay();
     loadNotes().then(async () => {
         // Handle permalink: #note-<uuid> (takes precedence over saved state)
         const hash = location.hash;
@@ -1888,201 +1965,7 @@ function toggleDarkMode() {
 // ════════════════════════════════════════════════════════════
 async function apiCall(endpoint, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...options.headers };
-    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-    const res = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
-    if (res.status === 401) { showLoginModal(); throw new Error('Auth required'); }
-    return res;
-}
-
-// ════════════════════════════════════════════════════════════
-// Auth — login / register
-// ════════════════════════════════════════════════════════════
-let currentUser = JSON.parse(localStorage.getItem('synote_user') || 'null');
-
-async function showLoginModal(forceTab) {
-    if (document.getElementById('loginModal')) return;
-
-    // Check if any users exist so we can default to the right tab
-    let hasUsers = true;
-    try {
-        const st = await fetch(`${API_URL}/auth/status`);
-        if (st.ok) hasUsers = (await st.json()).has_users;
-    } catch { /* offline — assume users exist */ }
-
-    const defaultTab = forceTab || (hasUsers ? 'login' : 'register');
-
-    const inputStyle = 'width:100%;box-sizing:border-box;padding:9px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:14px;outline:none;font-family:inherit;color:var(--text-primary);background:var(--content-bg);margin-bottom:10px;';
-    const modal = document.createElement('div');
-    modal.id = 'loginModal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:9000;backdrop-filter:blur(8px);';
-    modal.innerHTML = `
-        <div style="background:var(--content-bg);padding:32px 28px 28px;border-radius:14px;box-shadow:var(--shadow-lg);width:400px;max-width:92%;border:1px solid var(--border);">
-            <div style="text-align:center;margin-bottom:22px;">
-                <div style="font-size:26px;margin-bottom:4px;">📝</div>
-                <h2 style="font-size:18px;font-weight:700;color:var(--text-primary);margin:0;">Synote</h2>
-                <p style="font-size:12.5px;color:var(--text-muted);margin:4px 0 0;">Your personal knowledge base</p>
-            </div>
-
-            <!-- Tabs -->
-            <div style="display:flex;border-bottom:1px solid var(--border);margin-bottom:20px;">
-                <button id="tabLogin" onclick="switchAuthTab('login')"
-                    style="flex:1;padding:8px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;border-bottom:2px solid ${defaultTab==='login'?'var(--accent)':'transparent'};color:${defaultTab==='login'?'var(--accent)':'var(--text-muted)'};">
-                    Sign In
-                </button>
-                <button id="tabRegister" onclick="switchAuthTab('register')"
-                    style="flex:1;padding:8px;border:none;background:none;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;border-bottom:2px solid ${defaultTab==='register'?'var(--accent)':'transparent'};color:${defaultTab==='register'?'var(--accent)':'var(--text-muted)'};">
-                    Create Account
-                </button>
-            </div>
-
-            <!-- Login form -->
-            <div id="formLogin" style="display:${defaultTab==='login'?'block':'none'};">
-                <input type="text" id="loginUsername" placeholder="Username" autocomplete="username" style="${inputStyle}">
-                <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" style="${inputStyle}">
-                <button onclick="submitLogin()" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;font-size:13.5px;font-weight:600;font-family:inherit;margin-top:4px;">
-                    Sign In
-                </button>
-            </div>
-
-            <!-- Register form -->
-            <div id="formRegister" style="display:${defaultTab==='register'?'block':'none'};">
-                ${!hasUsers ? '<p style="font-size:12px;color:var(--accent);margin-bottom:10px;text-align:center;">No accounts yet — create the first one.</p>' : ''}
-                <input type="text" id="regUsername" placeholder="Username" autocomplete="username" style="${inputStyle}">
-                <input type="password" id="regPassword" placeholder="Password (min 6 chars)" autocomplete="new-password" style="${inputStyle}">
-                <input type="password" id="regConfirm" placeholder="Confirm password" autocomplete="new-password" style="${inputStyle}">
-                <button onclick="submitRegister()" style="width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:6px;cursor:pointer;font-size:13.5px;font-weight:600;font-family:inherit;margin-top:4px;">
-                    Create Account
-                </button>
-            </div>
-
-            <p id="authError" style="margin-top:12px;color:var(--danger);font-size:12.5px;text-align:center;display:none;"></p>
-        </div>`;
-    document.body.appendChild(modal);
-
-    // Focus first input of active tab
-    const firstInput = defaultTab === 'login'
-        ? document.getElementById('loginUsername')
-        : document.getElementById('regUsername');
-    firstInput?.focus();
-
-    // Enter key submits
-    modal.addEventListener('keydown', e => {
-        if (e.key !== 'Enter') return;
-        const loginVisible = document.getElementById('formLogin').style.display !== 'none';
-        loginVisible ? submitLogin() : submitRegister();
-    });
-}
-
-function switchAuthTab(tab) {
-    document.getElementById('formLogin').style.display   = tab === 'login'    ? 'block' : 'none';
-    document.getElementById('formRegister').style.display = tab === 'register' ? 'block' : 'none';
-    document.getElementById('tabLogin').style.borderBottomColor    = tab === 'login'    ? 'var(--accent)' : 'transparent';
-    document.getElementById('tabRegister').style.borderBottomColor = tab === 'register' ? 'var(--accent)' : 'transparent';
-    document.getElementById('tabLogin').style.color    = tab === 'login'    ? 'var(--accent)' : 'var(--text-muted)';
-    document.getElementById('tabRegister').style.color = tab === 'register' ? 'var(--accent)' : 'var(--text-muted)';
-    document.getElementById('authError').style.display = 'none';
-    (tab === 'login' ? document.getElementById('loginUsername') : document.getElementById('regUsername'))?.focus();
-}
-
-function setAuthError(msg) {
-    const el = document.getElementById('authError');
-    if (el) { el.textContent = msg; el.style.display = 'block'; }
-}
-
-async function submitLogin() {
-    const username = document.getElementById('loginUsername')?.value.trim();
-    const password = document.getElementById('loginPassword')?.value;
-    if (!username || !password) { setAuthError('Please fill in all fields.'); return; }
-    
-    const btn = document.querySelector('#formLogin button');
-    const originalText = btn?.textContent;
-    if (btn) { btn.textContent = 'Signing in...'; btn.disabled = true; }
-    
-    try {
-        console.log('Attempting login to:', `${API_URL}/auth/login`);
-        const res = await fetch(`${API_URL}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password }),
-        });
-        console.log('Login response status:', res.status);
-        if (res.ok) {
-            const data = await res.json();
-            console.log('Login success, token received:', !!data.token);
-            onAuthSuccess(data.token, data.username);
-        } else {
-            const text = await res.text();
-            console.log('Login failed:', text);
-            setAuthError(text || 'Invalid username or password.');
-        }
-    } catch (e) { 
-        console.error('Login error:', e);
-        setAuthError('Connection failed. Is the server running?'); 
-    } finally {
-        if (btn) { btn.textContent = originalText; btn.disabled = false; }
-    }
-}
-
-async function submitRegister() {
-    const username = document.getElementById('regUsername')?.value.trim();
-    const password = document.getElementById('regPassword')?.value;
-    const confirm  = document.getElementById('regConfirm')?.value;
-    if (!username || !password) { setAuthError('Please fill in all fields.'); return; }
-    if (password !== confirm) { setAuthError('Passwords do not match.'); return; }
-    if (password.length < 6)  { setAuthError('Password must be at least 6 characters.'); return; }
-    try {
-        const res = await fetch(`${API_URL}/auth/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password }),
-        });
-        if (res.ok) {
-            const data = await res.json();
-            onAuthSuccess(data.token, data.username);
-        } else if (res.status === 409) {
-            setAuthError('Username already taken.');
-        } else {
-            const text = await res.text();
-            setAuthError(text || 'Registration failed.');
-        }
-    } catch { setAuthError('Connection failed. Is the server running?'); }
-}
-
-function onAuthSuccess(token, username) {
-    authToken = token;
-    currentUser = { username };
-    localStorage.setItem('synote_token', token);
-    localStorage.setItem('synote_user', JSON.stringify({ username }));
-    document.getElementById('loginModal')?.remove();
-    updateUserDisplay();
-    showNotification(`Welcome, ${username}!`, 'success');
-    loadNotes();
-}
-
-function logout() {
-    authToken = null;
-    currentUser = null;
-    localStorage.removeItem('synote_token');
-    localStorage.removeItem('synote_user');
-    updateUserDisplay();
-    // Clear panes
-    openPanes = [];
-    document.getElementById('panesContainer').innerHTML = `
-        <div class="empty-state"><h2>Welcome to Synote</h2><p>Sign in to access your notes.</p></div>`;
-    document.getElementById('notesList').innerHTML = '';
-    showLoginModal('login');
-}
-
-function updateUserDisplay() {
-    const btn = document.getElementById('userMenuBtn');
-    if (!btn) return;
-    if (currentUser) {
-        btn.textContent = currentUser.username.slice(0, 2).toUpperCase();
-        btn.title = `Signed in as ${currentUser.username} — click to sign out`;
-        btn.style.display = '';
-    } else {
-        btn.style.display = 'none';
-    }
+    return fetch(`${API_URL}${endpoint}`, { ...options, headers });
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2295,10 +2178,10 @@ async function bulkDelete() {
 async function loadNotes() {
     try {
         const res = await apiCall('/notes');
-        if (!res.ok) { if (res.status === 401 || res.status === 403) { showLoginModal(); return; } return; }
+        if (!res.ok) return;
         notes = await res.json();
         renderNotesList();
-    } catch { showLoginModal(); }
+    } catch { /* offline — leave existing list as-is */ }
 }
 
 function getSortedNotes(arr) {
@@ -2457,7 +2340,7 @@ async function loadNote(id) {
     }
     try {
         const res = await apiCall(`/notes/${id}`);
-        if (!res.ok) { if (res.status === 401) { showLoginModal(); return; } throw new Error(); }
+        if (!res.ok) throw new Error();
         const note = await res.json();
         noteCache.set(note.id, note);
         currentNote = note;
@@ -4272,6 +4155,98 @@ async function showGraphView() {
 function closeGraphView() {
     openPanes = []; currentNote = null;
     renderPanes(); renderNotesList();
+}
+
+// ── Milestones view ──────────────────────────────────────────
+async function showMilestonesView(researchId) {
+    const container = document.getElementById('panesContainer');
+    container.innerHTML = `
+        <div class="milestones-container">
+            <div class="milestones-header">
+                <h2>🕌 Milestones</h2>
+                <button class="btn" onclick="closeMilestonesView()">← Back</button>
+            </div>
+            <div class="milestones-body" id="milestonesBody">
+                <p style="color:#888;text-align:center;padding:3rem;">Loading…</p>
+            </div>
+        </div>`;
+    try {
+        const res = await fetch(`/milestones/${researchId}.json`);
+        if (!res.ok) throw new Error('Not found');
+        const data = await res.json();
+        document.getElementById('milestonesBody').innerHTML = renderMilestonesHTML(data);
+    } catch {
+        document.getElementById('milestonesBody').innerHTML =
+            `<p style="color:#e74c3c;text-align:center;padding:3rem;">Failed to load milestones data.</p>`;
+    }
+}
+
+function closeMilestonesView() {
+    openPanes = []; currentNote = null;
+    renderPanes(); renderNotesList();
+}
+
+function renderMilestonesHTML(data) {
+    const eraColors = {};
+    (data.eras || []).forEach(e => { eraColors[e.id] = e.color || '#6d5ef5'; });
+
+    const erasHTML = (data.eras || []).map(era => {
+        const tp = era.turning_point;
+        const tpHTML = tp ? `
+            <div class="ms-turning-point">
+                <div class="ms-tp-year">${tp.year}</div>
+                <div class="ms-tp-event">${escapeHtml(tp.event)}</div>
+            </div>` : '';
+        const scholarsHTML = (era.scholars || []).map(s => `
+            <div class="ms-scholar" style="border-color:${era.color}">
+                <div class="ms-scholar-name">${escapeHtml(s.name)}${s.years ? ` <span style="font-weight:400;color:#888">(${escapeHtml(s.years)})</span>` : s.death_year ? ` <span style="font-weight:400;color:#888">(d. ${s.death_year})</span>` : ''}</div>
+                <div class="ms-scholar-work">${escapeHtml(s.work || '')}</div>
+                <div class="ms-scholar-sig">${escapeHtml(s.significance || '')}</div>
+            </div>`).join('');
+        return `
+            <div class="ms-era">
+                <div class="ms-era-marker" style="background:${era.color}"></div>
+                <div class="ms-era-card">
+                    <div class="ms-era-head">
+                        <span class="ms-era-emoji">${era.emoji || ''}</span>
+                        <span class="ms-era-name">${escapeHtml(era.name)}</span>
+                    </div>
+                    <div class="ms-era-period">${escapeHtml(era.period || '')}</div>
+                    <div class="ms-era-innovation">${escapeHtml(era.key_innovation || '')}</div>
+                    ${tpHTML}
+                    <div class="ms-scholars">${scholarsHTML}</div>
+                </div>
+            </div>`;
+    }).join('');
+
+    const pointsHTML = (data.key_transformation_points || []).map(p => `
+        <div class="ms-point-card">
+            <div class="ms-point-year">${p.year}</div>
+            <div class="ms-point-event">${escapeHtml(p.event)}</div>
+            <div class="ms-point-impact">${escapeHtml(p.impact || '')}</div>
+        </div>`).join('');
+
+    const srcId = data.metadata?.source_id;
+    const footerLink = srcId
+        ? `<a href="#note-${srcId}" onclick="closeMilestonesView();loadNote('${srcId}')">Source note</a>`
+        : '';
+
+    return `
+        <h1 class="milestones-title">${escapeHtml(data.title || 'Milestones')}</h1>
+        <p class="milestones-subtitle">${escapeHtml(data.subtitle || '')}</p>
+        <div class="ms-timeline">
+            <div class="ms-eras">${erasHTML}</div>
+        </div>
+        ${pointsHTML ? `
+        <div class="ms-transform-section">
+            <h3>📍 Key Transformation Points</h3>
+            <div class="ms-points-grid">${pointsHTML}</div>
+        </div>` : ''}
+        <div class="ms-footer">${footerLink}</div>`;
+}
+
+function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function renderForceGraph(data) {
